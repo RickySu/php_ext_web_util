@@ -11,7 +11,7 @@
 #endif
 
 #include <php.h>
-#include <r3/r3.h>
+#include <r3.h>
 #include "common.h"
 
 extern zend_module_entry php_ext_web_util_module_entry;

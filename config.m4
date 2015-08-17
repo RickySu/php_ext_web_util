@@ -1,6 +1,6 @@
 THIRDPARTY_BUILD_DIR="$srcdir/thirdparty/build"
 
-PHP_ADD_INCLUDE("$srcdir/thirdparty/build/include")
+PHP_ADD_INCLUDE("$srcdir/thirdparty/r3/include")
 
 PHP_ARG_ENABLE(php_ext_web_util, whether to enable php_ext_web_util support,
 Make sure that the comment is aligned:
