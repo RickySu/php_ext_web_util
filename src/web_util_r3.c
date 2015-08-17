@@ -109,7 +109,7 @@ PHP_METHOD(WebUtil_R3, compile){
         if(zend_hash_index_find(Z_ARRVAL_P(routes), i, (void **) &route) == SUCCESS){
             extractRoute(*route, &pattern, &method, &data);
             if(pattern && method && data){
-                if(!r3_tree_insert_routel(resource->n, Z_LVAL_P(method), Z_STRVAL_P(pattern), Z_STRLEN_P(pattern), (void *)i)){
+                if(!r3_tree_insert_routel(resource->n, Z_LVAL_P(method), Z_STRVAL_P(pattern), Z_STRLEN_P(pattern), (void *)*route)){
                     RETURN_BOOL(0);
                 }
             }
@@ -124,10 +124,10 @@ PHP_METHOD(WebUtil_R3, compile){
 }
 
 PHP_METHOD(WebUtil_R3, match){
-    int matched, i;
+    int i;
     zval *self = getThis();
     web_util_r3_t *resource = FETCH_OBJECT_RESOURCE(self, web_util_r3_t);
-    zval *routes, **r_route;
+    zval *r_route;
     char *uri, *c_uri;
     int uri_len;
     long method;
@@ -136,8 +136,6 @@ PHP_METHOD(WebUtil_R3, match){
     route *matched_route;
     zval *params;
        
-    routes = zend_read_property(CLASS_ENTRY(WebUtil_R3), self, ZEND_STRL("routes"), 0 TSRMLS_CC);
-
     if(!resource->n){
         RETURN_FALSE;
     }
@@ -153,7 +151,7 @@ PHP_METHOD(WebUtil_R3, match){
     array_init(return_value);
     
     if(matched_route != NULL){
-        matched = (int) matched_route->data;
+        r_route = (zval *) matched_route->data;
         MAKE_STD_ZVAL(params);
         array_init(params);
 
@@ -161,13 +159,10 @@ PHP_METHOD(WebUtil_R3, match){
             add_next_index_string(params, entry->vars->tokens[i], 1);
         }
         
-        if(zend_hash_index_find(Z_ARRVAL_P(routes), matched, (void **) &r_route) == SUCCESS){
-            extractRoute(*r_route, &r_pattern, &r_method, &r_data);
-            Z_ADDREF_P(r_data);
-            add_next_index_zval(return_value, r_data);
-            add_next_index_zval(return_value, params);
-        }
-        
+        extractRoute(r_route, &r_pattern, &r_method, &r_data);
+        Z_ADDREF_P(r_data);
+        add_next_index_zval(return_value, r_data);
+        add_next_index_zval(return_value, params);
 
     }
     efree(entry);    
