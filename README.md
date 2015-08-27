@@ -41,7 +41,7 @@ Array
     [0] => match /{id}.html
     [1] => Array
         (
-            [0] => 123                // id parameters
+            [id] => 123                // id parameters
         )
 
 )

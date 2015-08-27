@@ -15,9 +15,9 @@ $r->addRoute(
 );
 $r->compile();
 $match = $r->match('/test-1234.html', $r::METHOD_GET);
-echo "{$match[0]} {$match[1][0]}\n";
+echo "{$match[0]} {$match[1]['id']}\n";
 $match = $r->match('/test/1234/5678.php', $r::METHOD_GET);
-echo "{$match[0]} {$match[1][0]} {$match[1][1]}\n";
+echo "{$match[0]} {$match[1]['id']} {$match[1]['id2']}\n";
 ?>
 --EXPECT--
 my-test-data 1234

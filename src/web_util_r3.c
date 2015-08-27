@@ -50,9 +50,9 @@ zend_always_inline void initRoutes(zval *routes){
     }
 }
 
-zend_always_inline void extractRoute(zval *route, zval **pattern, zval **method, zval **data){
-    zval **p_pattern, **p_method, **p_data;
-    *pattern = *method = *data = NULL;
+zend_always_inline void extractRoute(zval *route, zval **pattern, zval **method, zval **data, zval **params){
+    zval **p_pattern, **p_method, **p_data, **p_params;
+    *pattern = *method = *data = *params= NULL;
     if(zend_hash_index_find(Z_ARRVAL_P(route), 0, (void **) &p_pattern) == SUCCESS){
         *pattern = *p_pattern;
     }
@@ -61,6 +61,9 @@ zend_always_inline void extractRoute(zval *route, zval **pattern, zval **method,
     }
     if(zend_hash_index_find(Z_ARRVAL_P(route), 2, (void **) &p_data) == SUCCESS){
         *data = *p_data;
+    }
+    if(zend_hash_index_find(Z_ARRVAL_P(route), 3, (void **) &p_params) == SUCCESS){
+        *params = *p_params;
     }
 }
 
@@ -89,12 +92,36 @@ PHP_METHOD(WebUtil_R3, addRoute){
     RETURN_LONG(zend_hash_num_elements(Z_ARRVAL_P(routes)));
 }
 
+void findSlug(char *pattern, int pattern_len, zval **names)
+{
+    char *err = NULL;
+    char *placeholder;
+    char *name;    
+    int placeholder_len = 0, name_len = 0;
+    int slug_cnt = r3_slug_count(pattern, pattern_len, &err);
+    int i;
+    if(slug_cnt <= 0){
+        *names = NULL;
+        return;
+    }
+    MAKE_STD_ZVAL(*names);
+    array_init(*names);
+    placeholder = pattern;
+    for(i=0; i<slug_cnt; i++){
+        placeholder = r3_slug_find_placeholder(placeholder, &placeholder_len);
+        name = r3_slug_find_name(placeholder, &name_len);
+        add_next_index_stringl(*names, name, name_len, 1);
+        placeholder++;
+    }
+}
+
 PHP_METHOD(WebUtil_R3, compile){
     int i, nRoutes;
     zval *self = getThis();
     web_util_r3_t *resource = FETCH_OBJECT_RESOURCE(self, web_util_r3_t);
     zval *routes, **route;
-    zval *pattern, *method, *data;
+    zval *pattern, *method, *data, *params;
+    zval *names;
     routes = zend_read_property(CLASS_ENTRY(WebUtil_R3), self, ZEND_STRL("routes"), 0 TSRMLS_CC);
     
     if(resource->n){
@@ -107,8 +134,12 @@ PHP_METHOD(WebUtil_R3, compile){
     
     for(i=0; i<nRoutes; i++){
         if(zend_hash_index_find(Z_ARRVAL_P(routes), i, (void **) &route) == SUCCESS){
-            extractRoute(*route, &pattern, &method, &data);
+            extractRoute(*route, &pattern, &method, &data, &params);
             if(pattern && method && data){
+                findSlug(Z_STRVAL_P(pattern), Z_STRLEN_P(pattern), &names);
+                if(names){              
+                    add_next_index_zval(*route, names);
+                }
                 if(!r3_tree_insert_routel(resource->n, Z_LVAL_P(method), Z_STRVAL_P(pattern), Z_STRLEN_P(pattern), (void *)*route)){
                     RETURN_BOOL(0);
                 }
@@ -131,10 +162,13 @@ PHP_METHOD(WebUtil_R3, match){
     char *uri, *c_uri;
     int uri_len;
     long method;
-    zval *r_pattern, *r_method, *r_data;
+    zval *r_pattern, *r_method, *r_data, *r_params;
     match_entry * entry;
     route *matched_route;
     zval *params;
+    zval *retval;
+    zval function_name;
+    zval *call_params[] = {NULL, NULL};
        
     if(!resource->n){
         RETURN_FALSE;
@@ -155,15 +189,23 @@ PHP_METHOD(WebUtil_R3, match){
         MAKE_STD_ZVAL(params);
         array_init(params);
 
+        
         for(i=0;i<entry->vars->len;i++){
             add_next_index_string(params, entry->vars->tokens[i], 1);
         }
         
-        extractRoute(r_route, &r_pattern, &r_method, &r_data);
+        extractRoute(r_route, &r_pattern, &r_method, &r_data, &r_params);
         Z_ADDREF_P(r_data);
         add_next_index_zval(return_value, r_data);
-        add_next_index_zval(return_value, params);
-
+        if(r_params){
+            call_params[0] = r_params;
+            call_params[1] = params;
+            MAKE_STD_ZVAL(retval);
+            ZVAL_STRING(&function_name, "array_combine", 1);
+            call_user_function(CG(function_table), NULL, &function_name, retval, 2, call_params TSRMLS_CC);
+            zval_dtor(&function_name);
+            add_next_index_zval(return_value, retval);
+        }
     }
     efree(entry);    
 }
