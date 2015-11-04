@@ -4,3 +4,11 @@ thirdparty/build/lib/libr3.a:
 	./autogen.sh && \
 	CFLAGS="$(CFLAGS) -fPIC"  ./configure --prefix="$(srcdir)/thirdparty/build" && \
 	make install
+
+thirdparty/build/lib/libhttp_parser.o:
+	@echo "Build http-parser"
+	cd thirdparty/http-parser && \
+	PREFIX="$(srcdir)/thirdparty/build" make clean && \
+	PREFIX="$(srcdir)/thirdparty/build" make package && \
+	PREFIX="$(srcdir)/thirdparty/build" make install && \
+	cp libhttp_parser.o "$(srcdir)/thirdparty/build/lib"
