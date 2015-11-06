@@ -27,6 +27,7 @@ ZEND_GET_MODULE(php_ext_web_util)
 
 PHP_MINIT_FUNCTION(php_ext_web_util) {
     CLASS_ENTRY_FUNCTION_C(WebUtil_R3);
+    CLASS_ENTRY_FUNCTION_C(WebUtil_http_parser);
     return SUCCESS;
 }
 

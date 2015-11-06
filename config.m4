@@ -1,6 +1,7 @@
 THIRDPARTY_BUILD_DIR="$srcdir/thirdparty/build"
 
-PHP_ADD_INCLUDE("$srcdir/thirdparty/r3/include")
+dnl PHP_ADD_INCLUDE("$srcdir/thirdparty/r3/include")
+PHP_ADD_INCLUDE("$srcdir/thirdparty/build/include")
 
 PHP_ARG_ENABLE(php_ext_web_util, whether to enable php_ext_web_util support,
 Make sure that the comment is aligned:
@@ -8,7 +9,9 @@ Make sure that the comment is aligned:
 
 MODULES="
     php_ext_web_util.c
+    src/bstring.c
     src/web_util_r3.c
+    src/web_util_http_parser.c
 "
 PHP_NEW_EXTENSION(php_ext_web_util, $MODULES, $ext_shared)
 

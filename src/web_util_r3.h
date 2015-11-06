@@ -2,6 +2,7 @@
 #define _WEB_UTIL_R3_H
 #include "../php_ext_web_util.h"
 #include "util.h"
+#include <r3/r3.h>
 
 CLASS_ENTRY_FUNCTION_D(WebUtil_R3);
 
@@ -18,7 +19,6 @@ ZEND_END_ARG_INFO()
 
 typedef struct web_util_r3_s{
     node *n;
-    zval *object;
     zend_object zo;
 } web_util_r3_t;
 

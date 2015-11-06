@@ -6,16 +6,15 @@
 #endif
 
 #ifdef ZTS
-    #warning php_ext_uv module will *NEVER* be thread-safe
+    #warning php_ext_web_util module will *NEVER* be thread-safe
     #include <TSRM.h>
 #endif
 
 #include <php.h>
-#include <r3.h>
-#include <r3_str.h>
 #include "common.h"
 
 extern zend_module_entry php_ext_web_util_module_entry;
 
 DECLARE_CLASS_ENTRY(WebUtil_R3);
+DECLARE_CLASS_ENTRY(WebUtil_http_parser);
 #endif
