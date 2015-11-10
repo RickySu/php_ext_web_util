@@ -16,6 +16,8 @@ PHP_METHOD(ce, me) { \
     zend_update_property(CLASS_ENTRY(ce), self, ZEND_STRL(#pn), cb TSRMLS_CC); \
 }
 
+
+
 zend_always_inline zval *fetchArrayElement_ex(zval *arr, const char *str, size_t str_len, int init) {
     zval **tmp_p, *tmp = NULL;
     
@@ -71,15 +73,69 @@ zend_always_inline void resetParserStatus(http_parser_ext *resource) {
     releaseParser(resource);
 }
 
-zend_always_inline zval *parseCookie(const char *cookieString, size_t cookieString_len) {
+zend_always_inline void parseRequest(http_parser_ext *resource) {
+    TSRMLS_FETCH();
+    char buf[8];
+    struct http_parser_url parser_url;
+    zval *parsedData = zend_read_property(CLASS_ENTRY(WebUtil_http_parser), &resource->object, ZEND_STRL("parsedData"), 0 TSRMLS_CC);
+    zval *parsedData_request;
+    zval *parsedData_query;
+    MAKE_STD_ZVAL(parsedData_request);
+    MAKE_STD_ZVAL(parsedData_query);
+    array_init(parsedData_request);
+    array_init(parsedData_query);
+    add_assoc_string(parsedData_request, "Method",  (char *) http_method_str((enum http_method)resource->parser.method), 1);
+    add_assoc_stringl(parsedData_request, "Target", resource->parser_data.url->val, resource->parser_data.url->len, 1);
+    add_assoc_string(parsedData_request, "Protocol",  "HTTP", 1);
+    snprintf(buf, sizeof(buf), "%d.%d", resource->parser.http_major, resource->parser.http_minor);
+    add_assoc_string(parsedData_request, "Protocol-Version",  buf, 1);
+
+    http_parser_parse_url(resource->parser_data.url->val, resource->parser_data.url->len, 0, &parser_url);
+    add_assoc_stringl(parsedData_query, "Path", &resource->parser_data.url->val[parser_url.field_data[UF_PATH].off], parser_url.field_data[UF_PATH].len, 1);
+
+    if(parser_url.field_data[UF_QUERY].len){
+        zval fn, retval;
+        zval *params[2];
+        MAKE_STD_ZVAL(params[0]);
+        ZVAL_STRINGL(params[0], &resource->parser_data.url->val[parser_url.field_data[UF_QUERY].off], parser_url.field_data[UF_QUERY].len, 1);
+        MAKE_STD_ZVAL(params[1]);
+        array_init(params[1]);
+        ZVAL_STRING(&fn, "parse_str", 1);
+        call_user_function(CG(function_table), NULL, &fn, &retval, 2, params TSRMLS_CC);
+        Z_ADDREF_P(params[1]);
+        add_assoc_zval(parsedData_query, "Param", params[1]);
+        zval_ptr_dtor(&params[0]);
+        zval_ptr_dtor(&params[1]);
+        zval_dtor(&fn);
+        zval_dtor(&retval);
+    }
+    
+    add_assoc_zval(parsedData, "Request", parsedData_request);
+    add_assoc_zval(parsedData, "Query", parsedData_query);
+}
+
+zend_always_inline void parseCookie(http_parser_ext *resource) {
+    zval *parsedData = zend_read_property(CLASS_ENTRY(WebUtil_http_parser), &resource->object, ZEND_STRL("parsedData"), 0 TSRMLS_CC);
+    zval *parsedData_header = fetchArrayElement(parsedData, ZEND_STRL("Header") + 1);
+    zval *s_cookie = fetchArrayElement_ex(parsedData_header, ZEND_STRL("Cookie") + 1, 0);
+    const char *cookieString;
+    size_t cookieString_len;
     bstring *key;
     uint token_equal_pos = 0, token_semi_pos = 0;
     uint field_start = 0;
     uint i = 0;
+
+    if(!s_cookie || Z_TYPE_P(s_cookie) != IS_STRING){
+        return;
+    }
+
+    cookieString = Z_STRVAL_P(s_cookie);
+    cookieString_len = Z_STRLEN_P(s_cookie);
+    
     zval *cookie;
     MAKE_STD_ZVAL(cookie);
     array_init(cookie);
-    
+
     while(cookieString_len){
         if(cookieString[i] == '='){
             if(token_equal_pos <= token_semi_pos){
@@ -105,7 +161,7 @@ zend_always_inline zval *parseCookie(const char *cookieString, size_t cookieStri
             break;
         }        
     }
-    return cookie;
+    add_assoc_zval(parsedData_header, "Cookie", cookie);
 }
 
 static http_parser_settings parser_response_settings = {
@@ -140,19 +196,23 @@ static int on_message_complete(http_parser_ext *resource){
 
 static int on_headers_complete_request(http_parser_ext *resource){
     TSRMLS_FETCH();
+    int ret = 0;
     zval retval;
     zval *parsedData = zend_read_property(CLASS_ENTRY(WebUtil_http_parser), &resource->object, ZEND_STRL("parsedData"), 0 TSRMLS_CC);
     zval *callback = zend_read_property(CLASS_ENTRY(WebUtil_http_parser), &resource->object, ZEND_STRL("onHeaderParsedCallback"), 0 TSRMLS_CC);
     zval *parsedData_header = fetchArrayElement(parsedData, ZEND_STRL("Header") + 1);
-    zval *cookie = fetchArrayElement_ex(parsedData_header, ZEND_STRL("Cookie") + 1, 0);
-    if(cookie && Z_TYPE_P(cookie) == IS_STRING){
-        cookie = parseCookie(Z_STRVAL_P(cookie), Z_STRLEN_P(cookie));
-        add_assoc_zval(parsedData_header, "Cookie", cookie);
-    }
+    
+    
+    resetHeaderParser(resource);
+    parseRequest(resource);
+    parseCookie(resource);
+
     if(!ZVAL_IS_NULL(callback)){
         call_user_function(CG(function_table), NULL, callback, &retval, 1, &parsedData TSRMLS_CC);
+        ret = !zend_is_true(&retval);
+        zval_dtor(&retval);
     }
-    return !zend_is_true(&retval);
+    return ret;
 }
 
 static int on_headers_complete_response(http_parser_ext *resource){
@@ -185,7 +245,20 @@ static int on_response_body(http_parser_ext *resource, const char *buf, size_t l
 }
 
 static int on_request_body(http_parser_ext *resource, const char *buf, size_t len){
-    return 0;
+    TSRMLS_FETCH();
+    int ret = 0;
+    zval retval;
+    zval *param;
+    zval *callback = zend_read_property(CLASS_ENTRY(WebUtil_http_parser), &resource->object, ZEND_STRL("onContentPieceCallback"), 0 TSRMLS_CC);
+    if(!ZVAL_IS_NULL(callback)){
+        MAKE_STD_ZVAL(param);
+        ZVAL_STRINGL(param, buf, len, 1);
+        call_user_function(CG(function_table), NULL, callback, &retval, 1, &param TSRMLS_CC);
+        ret = !zend_is_true(&retval);
+        zval_dtor(&retval);
+        zval_ptr_dtor(&param);
+    }
+    return ret;
 }
 
 CLASS_ENTRY_FUNCTION_D(WebUtil_http_parser){
@@ -262,5 +335,5 @@ PHP_METHOD(WebUtil_http_parser, __construct){
 
 SETTER_METHOD(WebUtil_http_parser, setOnHeaderParsedCallback, onHeaderParsedCallback)
 SETTER_METHOD(WebUtil_http_parser, setOnBodyParsedCallback, onBodyParsedCallback)
-SETTER_METHOD(WebUtil_http_parser, setOnContentPieceCallback, oContentPieceCallback)
+SETTER_METHOD(WebUtil_http_parser, setOnContentPieceCallback, onContentPieceCallback)
 SETTER_METHOD(WebUtil_http_parser, setOnMultipartCallback, onMultipartCallback)

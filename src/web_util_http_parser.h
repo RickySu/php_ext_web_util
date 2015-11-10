@@ -1,6 +1,7 @@
 #ifndef _WEB_UTIL_HTTP_PARSER_H
 #define _WEB_UTIL_HTTP_PARSER_H
 #include "../php_ext_web_util.h"
+#include "php_variables.h"
 #include "util.h"
 #include "bstring.h"
 #include <http_parser.h>
@@ -87,7 +88,8 @@ DECLARE_FUNCTION_ENTRY(WebUtil_http_parser) = {
     PHP_FE_END
 };
 
-zend_always_inline zval *parseCookie(const char *cookieString, size_t cookieString_len);
+zend_always_inline void parseCookie(http_parser_ext *resource);
+zend_always_inline void parseRequest(http_parser_ext *resource);
 static void resetParserStatus(http_parser_ext *resource);
 static int on_message_begin(http_parser_ext *resource);
 static int on_message_complete(http_parser_ext *resource);
