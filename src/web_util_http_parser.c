@@ -1,5 +1,10 @@
 #include "web_util_http_parser.h"
 
+static const char s_application_x_www_form_urlencode[] = "application/x-www-form-urlencoded";
+static const char s_application_json[] = "application/json";
+static const char s_multipart_form_data[] = "multipart/form-data";
+static const char s_boundary_equal[] = "boundary=";
+
 #define SETTER_METHOD(ce, me, pn) \
 PHP_METHOD(ce, me) { \
     zval *self = getThis(); \
@@ -16,7 +21,116 @@ PHP_METHOD(ce, me) { \
     zend_update_property(CLASS_ENTRY(ce), self, ZEND_STRL(#pn), cb TSRMLS_CC); \
 }
 
+zend_always_inline int multipartCallback(http_parser_ext *resource, bstring *data, int type TSRMLS_DC) {
+    bstring_free(data);
+    return 0;
+}
 
+zend_always_inline int sendData(http_parser_ext *resource, bstring *data TSRMLS_DC) {
+    int headerpos, ret;
+    if(resource->parser_data.multipartHeader){
+        bstring_append_p(&resource->parser_data.multipartHeaderData, data->val, data->len);
+        if((headerpos = bstring_find_cstr(resource->parser_data.multipartHeaderData, ZEND_STRL("\r\n\r\n"))) >= 0){
+            if(multipartCallback(resource, bstring_make(resource->parser_data.multipartHeaderData->val, headerpos), TYPE_MULTIPART_HEADER)){
+                bstring_free(data);
+                return 1;
+            }
+            if(resource->parser_data.multipartHeaderData->len - headerpos - 4 > 0){
+                if(multipartCallback(resource, bstring_make(&resource->parser_data.multipartHeaderData->val[headerpos + 4], resource->parser_data.multipartHeaderData->len - headerpos - 4), TYPE_MULTIPART_CONTENT)){
+                    bstring_free(data);
+                    return 1;
+                }
+            }
+            UNSET_BSTRING(resource->parser_data.multipartHeaderData);
+            resource->parser_data.multipartHeader = 0;
+        }
+        bstring_free(data);
+        return 0;
+    }
+    return multipartCallback(resource, data,  TYPE_MULTIPART_CONTENT TSRMLS_DC);
+}
+
+zend_always_inline int flushBufferData(http_parser_ext *resource TSRMLS_DC) {
+    int pos, end_pos;
+
+    if(resource->parser_data.multipartEnd){
+        UNSET_BSTRING(resource->parser_data.body);
+        return 0;
+    }
+
+    while(1){
+        if(resource->parser_data.body->len < resource->parser_data.delimiterClose->len){
+            return 0;
+        }
+
+        pos = bstring_find(resource->parser_data.body, resource->parser_data.delimiter);
+        end_pos = bstring_find(resource->parser_data.body, resource->parser_data.delimiterClose);
+
+        if(end_pos >= 0){
+            bstring_cuttail(resource->parser_data.body, end_pos);
+            resource->parser_data.multipartEnd = 1;
+        }
+
+        if(pos >= 0){
+            if(pos > 0){
+                if(sendData(resource, bstring_make(resource->parser_data.body->val, pos) TSRMLS_CC)){
+                    return 1;
+                }
+            }
+            bstring_cuthead(resource->parser_data.body, pos + resource->parser_data.delimiter->len);
+            resource->parser_data.multipartHeader = 1;
+            if(bstring_find(resource->parser_data.body, resource->parser_data.delimiter) >= 0){
+                continue;
+            }
+        }
+
+        if(resource->parser_data.multipartEnd){
+            if(sendData(resource, resource->parser_data.body TSRMLS_CC)){
+                return 1;
+            }
+            UNSET_BSTRING(resource->parser_data.body);
+            break;
+        }
+
+        if(pos < 0 && resource->parser_data.body->len > resource->parser_data.delimiter->len){
+            if(sendData(resource, bstring_make(resource->parser_data.body->val, resource->parser_data.body->len - resource->parser_data.delimiter->len) TSRMLS_CC)){
+                return 1;
+            }
+            bstring_cuthead(resource->parser_data.body, resource->parser_data.body->len - resource->parser_data.delimiter->len);
+        }
+        break;
+    }
+
+    return 0;
+}
+
+zend_always_inline zval *parseBody(http_parser_ext *resource TSRMLS_DC) {
+    zval fn, retval;
+    zval *params[2];
+    zval *parsedContent;
+    MAKE_STD_ZVAL(parsedContent);
+    switch(resource->parser_data.contentType){
+        case CONTENT_TYPE_URLENCODE:
+            MAKE_STD_ZVAL(params[0]);
+            ZVAL_STRINGL(params[0], resource->parser_data.body->val, resource->parser_data.body->len, 1);
+            MAKE_STD_ZVAL(params[1]);
+            array_init(params[1]);
+            ZVAL_STRING(&fn, "parse_str", 1);
+            call_user_function(CG(function_table), NULL, &fn, &retval, 2, params TSRMLS_CC);
+            ZVAL_ZVAL(parsedContent, params[1], 1, 0);
+            zval_ptr_dtor(&params[0]);
+            zval_ptr_dtor(&params[1]);
+            zval_dtor(&fn);
+            zval_dtor(&retval);
+            break;
+        case CONTENT_TYPE_JSONENCODE:
+            php_json_decode(parsedContent, resource->parser_data.body->val, resource->parser_data.body->len, 1, PHP_JSON_PARSER_DEFAULT_DEPTH TSRMLS_CC);
+            break;
+        default:
+            ZVAL_STRINGL(parsedContent, resource->parser_data.body->val, resource->parser_data.body->len, 1);
+    }
+    return parsedContent;
+}
 
 zend_always_inline zval *fetchArrayElement_ex(zval *arr, const char *str, size_t str_len, int init) {
     zval **tmp_p, *tmp = NULL;
@@ -37,8 +151,7 @@ zend_always_inline zval *fetchArrayElement(zval *arr, const char *str, size_t st
     return fetchArrayElement_ex(arr, str, str_len, 1);
 }
 
-zend_always_inline void resetHeaderParser(http_parser_ext *resource){
-    TSRMLS_FETCH();
+zend_always_inline void resetHeaderParser(http_parser_ext *resource TSRMLS_DC){
     zval *parsedData = zend_read_property(CLASS_ENTRY(WebUtil_http_parser), &resource->object, ZEND_STRL("parsedData"), 0 TSRMLS_CC);
     zval *parsedData_header = fetchArrayElement(parsedData, ZEND_STRL("Header") + 1);
     if(resource->parser_data.header && resource->parser_data.field){
@@ -56,10 +169,13 @@ zend_always_inline void releaseParser(http_parser_ext *resource) {
     UNSET_BSTRING(resource->parser_data.url);
     UNSET_BSTRING(resource->parser_data.header);
     UNSET_BSTRING(resource->parser_data.field);
+    UNSET_BSTRING(resource->parser_data.body);
+    UNSET_BSTRING(resource->parser_data.multipartHeaderData);
+    UNSET_BSTRING(resource->parser_data.delimiter);
+    UNSET_BSTRING(resource->parser_data.delimiterClose);
 }
 
-zend_always_inline void resetParserStatus(http_parser_ext *resource) {
-    TSRMLS_FETCH();
+zend_always_inline void resetParserStatus(http_parser_ext *resource TSRMLS_DC) {
     zval *parsedData = zend_read_property(CLASS_ENTRY(WebUtil_http_parser), &resource->object, ZEND_STRL("parsedData"), 0 TSRMLS_CC);
     if(Z_TYPE_P(parsedData) != IS_ARRAY){
         array_init(parsedData);
@@ -73,8 +189,46 @@ zend_always_inline void resetParserStatus(http_parser_ext *resource) {
     releaseParser(resource);
 }
 
-zend_always_inline void parseRequest(http_parser_ext *resource) {
-    TSRMLS_FETCH();
+zend_always_inline void parseContentType(http_parser_ext *resource TSRMLS_DC) {
+    zval *parsedData = zend_read_property(CLASS_ENTRY(WebUtil_http_parser), &resource->object, ZEND_STRL("parsedData"), 0 TSRMLS_CC);
+    zval *parsedData_header = fetchArrayElement(parsedData, ZEND_STRL("Header") + 1);
+    zval *z_content_type = fetchArrayElement_ex(parsedData_header, ZEND_STRL("Content-Type") + 1, 0);
+
+    if(!z_content_type){
+        return;
+    }
+
+    if(strncmp(Z_STRVAL_P(z_content_type), s_application_x_www_form_urlencode, sizeof(s_application_x_www_form_urlencode) - 1) == 0){
+        resource->parser_data.contentType = CONTENT_TYPE_URLENCODE;
+        return;
+    }
+    
+    if(strncmp(Z_STRVAL_P(z_content_type), s_application_json, sizeof(s_application_json) - 1) == 0){
+        resource->parser_data.contentType = CONTENT_TYPE_JSONENCODE;
+        return;
+    }
+    
+    if(strncmp(Z_STRVAL_P(z_content_type), s_multipart_form_data, sizeof(s_multipart_form_data) -1) == 0){
+        resource->parser_data.contentType = CONTENT_TYPE_MULTIPART;
+        char *boundary = php_memnstr(Z_STRVAL_P(z_content_type), (char *) s_boundary_equal, sizeof(s_boundary_equal) - 1, &Z_STRVAL_P(z_content_type)[Z_STRLEN_P(z_content_type) - 1]);
+        size_t boundary_len;
+        if(boundary){
+            boundary_len = (Z_STRLEN_P(z_content_type) - (boundary - Z_STRVAL_P(z_content_type)) - sizeof(s_boundary_equal));
+            resource->parser_data.delimiter = bstring_make(ZEND_STRL("\r\n--"));
+            bstring_append_p(&resource->parser_data.delimiter, &boundary[sizeof(s_boundary_equal) - 1], boundary_len + 1);
+            resource->parser_data.delimiterClose = bstring_copy(resource->parser_data.delimiter);
+            bstring_append_p(&resource->parser_data.delimiter, ZEND_STRL("\r\n"));
+            bstring_append_p(&resource->parser_data.delimiterClose, ZEND_STRL("--"));
+            UNSET_BSTRING(resource->parser_data.multipartHeaderData);
+            UNSET_BSTRING(resource->parser_data.body);
+            resource->parser_data.body = bstring_make(ZEND_STRL("\r\n"));
+            resource->parser_data.multipartHeader = resource->parser_data.multipartEnd = 0;
+        }
+        return;
+    }    
+}
+
+zend_always_inline void parseRequest(http_parser_ext *resource TSRMLS_DC) {
     char buf[8];
     struct http_parser_url parser_url;
     zval *parsedData = zend_read_property(CLASS_ENTRY(WebUtil_http_parser), &resource->object, ZEND_STRL("parsedData"), 0 TSRMLS_CC);
@@ -114,10 +268,10 @@ zend_always_inline void parseRequest(http_parser_ext *resource) {
     add_assoc_zval(parsedData, "Query", parsedData_query);
 }
 
-zend_always_inline void parseCookie(http_parser_ext *resource) {
+zend_always_inline void parseCookie(http_parser_ext *resource, const char *cookie_field TSRMLS_DC) {
     zval *parsedData = zend_read_property(CLASS_ENTRY(WebUtil_http_parser), &resource->object, ZEND_STRL("parsedData"), 0 TSRMLS_CC);
     zval *parsedData_header = fetchArrayElement(parsedData, ZEND_STRL("Header") + 1);
-    zval *s_cookie = fetchArrayElement_ex(parsedData_header, ZEND_STRL("Cookie") + 1, 0);
+    zval *s_cookie = fetchArrayElement_ex(parsedData_header, cookie_field, strlen(cookie_field) + 1, 0);
     const char *cookieString;
     size_t cookieString_len;
     bstring *key;
@@ -161,7 +315,7 @@ zend_always_inline void parseCookie(http_parser_ext *resource) {
             break;
         }        
     }
-    add_assoc_zval(parsedData_header, "Cookie", cookie);
+    add_assoc_zval(parsedData_header, cookie_field, cookie);
 }
 
 static http_parser_settings parser_response_settings = {
@@ -191,7 +345,20 @@ static int on_message_begin(http_parser_ext *resource){
 }
 
 static int on_message_complete(http_parser_ext *resource){
-    return 0;
+    TSRMLS_FETCH();
+    int ret = 0;
+    zval retval;
+    zval *callback = zend_read_property(CLASS_ENTRY(WebUtil_http_parser), &resource->object, ZEND_STRL("onBodyParsedCallback"), 0 TSRMLS_CC);
+    zval *parsedBody = parseBody(resource TSRMLS_CC);
+    if(!ZVAL_IS_NULL(callback)){
+        call_user_function(CG(function_table), NULL, callback, &retval, 1, &parsedBody TSRMLS_CC);
+        ret = !zend_is_true(&retval);
+        zval_dtor(&retval);
+    }
+    zval_ptr_dtor(&parsedBody);
+    zval_dtor(&retval);
+    releaseParser(resource);
+    return ret;
 }
 
 static int on_headers_complete_request(http_parser_ext *resource){
@@ -203,9 +370,10 @@ static int on_headers_complete_request(http_parser_ext *resource){
     zval *parsedData_header = fetchArrayElement(parsedData, ZEND_STRL("Header") + 1);
     
     
-    resetHeaderParser(resource);
-    parseRequest(resource);
-    parseCookie(resource);
+    resetHeaderParser(resource TSRMLS_CC);
+    parseRequest(resource TSRMLS_CC);
+    parseContentType(resource TSRMLS_CC);
+    parseCookie(resource, "Cookie" TSRMLS_CC);
 
     if(!ZVAL_IS_NULL(callback)){
         call_user_function(CG(function_table), NULL, callback, &retval, 1, &parsedData TSRMLS_CC);
@@ -229,7 +397,8 @@ static int on_url(http_parser_ext *resource, const char *buf, size_t len){
 }
 
 static int on_header_field(http_parser_ext *resource, const char *buf, size_t len){
-    resetHeaderParser(resource);
+    TSRMLS_FETCH();
+    resetHeaderParser(resource TSRMLS_CC);
     bstring_append_p(&resource->parser_data.header, buf, len);
     return 0;
 }
@@ -250,6 +419,7 @@ static int on_request_body(http_parser_ext *resource, const char *buf, size_t le
     zval retval;
     zval *param;
     zval *callback = zend_read_property(CLASS_ENTRY(WebUtil_http_parser), &resource->object, ZEND_STRL("onContentPieceCallback"), 0 TSRMLS_CC);
+
     if(!ZVAL_IS_NULL(callback)){
         MAKE_STD_ZVAL(param);
         ZVAL_STRINGL(param, buf, len, 1);
@@ -258,7 +428,18 @@ static int on_request_body(http_parser_ext *resource, const char *buf, size_t le
         zval_dtor(&retval);
         zval_ptr_dtor(&param);
     }
-    return ret;
+    
+    if(ret){
+        return 1;
+    }
+
+    bstring_append_p(&resource->parser_data.body, buf, len);
+    
+    if(resource->parser_data.contentType == CONTENT_TYPE_MULTIPART){
+        return flushBufferData(resource TSRMLS_CC);
+    }
+
+    return 0;
 }
 
 CLASS_ENTRY_FUNCTION_D(WebUtil_http_parser){
@@ -300,7 +481,7 @@ void freeWebUtil_http_parserResource(void *object TSRMLS_DC) {
 PHP_METHOD(WebUtil_http_parser, reset){
     zval *self = getThis();
     http_parser_ext *resource = FETCH_OBJECT_RESOURCE(self, http_parser_ext);
-    resetParserStatus(resource);
+    resetParserStatus(resource TSRMLS_CC);
 }
 
 PHP_METHOD(WebUtil_http_parser, feed){
@@ -330,7 +511,7 @@ PHP_METHOD(WebUtil_http_parser, __construct){
         resource->parserType = HTTP_RESPONSE;
     }
     resource->object = *self;
-    resetParserStatus(resource);
+    resetParserStatus(resource TSRMLS_CC);
 }
 
 SETTER_METHOD(WebUtil_http_parser, setOnHeaderParsedCallback, onHeaderParsedCallback)

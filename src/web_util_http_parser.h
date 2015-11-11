@@ -5,6 +5,11 @@
 #include "util.h"
 #include "bstring.h"
 #include <http_parser.h>
+#include <ext/json/php_json.h>
+
+#ifndef PHP_JSON_PARSER_DEFAULT_DEPTH
+#define PHP_JSON_PARSER_DEFAULT_DEPTH 512
+#endif
 
 #define CONTENT_TYPE_NONE       0
 #define CONTENT_TYPE_URLENCODE  1
@@ -56,6 +61,10 @@ typedef struct http_parser_ext_s{
         bstring *url;
         bstring *header;
         bstring *field;
+        bstring *body;
+        bstring *multipartHeaderData;
+        bstring *delimiter;
+        bstring *delimiterClose;
         int contentType;
         int headerEnd;
         int multipartHeader;
@@ -88,8 +97,14 @@ DECLARE_FUNCTION_ENTRY(WebUtil_http_parser) = {
     PHP_FE_END
 };
 
-zend_always_inline void parseCookie(http_parser_ext *resource);
-zend_always_inline void parseRequest(http_parser_ext *resource);
+zend_always_inline int multipartCallback(http_parser_ext *resource, bstring *data, int type TSRMLS_DC);
+zend_always_inline int sendData(http_parser_ext *parser, bstring *data TSRMLS_DC);
+zend_always_inline int flushBufferData(http_parser_ext *parser TSRMLS_DC);
+zend_always_inline zval *parseBody(http_parser_ext *resource TSRMLS_DC);
+zend_always_inline void parseContentType(http_parser_ext *resource TSRMLS_DC);
+zend_always_inline void parseCookie(http_parser_ext *resource, const char *cookie_field TSRMLS_DC);
+zend_always_inline void parseRequest(http_parser_ext *resource TSRMLS_DC);
+
 static void resetParserStatus(http_parser_ext *resource);
 static int on_message_begin(http_parser_ext *resource);
 static int on_message_complete(http_parser_ext *resource);
