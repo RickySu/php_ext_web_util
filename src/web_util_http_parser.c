@@ -22,8 +22,23 @@ PHP_METHOD(ce, me) { \
 }
 
 zend_always_inline int multipartCallback(http_parser_ext *resource, bstring *data, int type TSRMLS_DC) {
+    int ret = 0;
+    zval retval;
+    zval *params[2];
+    zval *callback = zend_read_property(CLASS_ENTRY(WebUtil_http_parser), &resource->object, ZEND_STRL("onMultipartCallback"), 0 TSRMLS_CC);
+    if(!ZVAL_IS_NULL(callback)){
+        MAKE_STD_ZVAL(params[0]);
+        MAKE_STD_ZVAL(params[1]);
+        ZVAL_STRINGL(params[0], data->val, data->len, 1);
+        ZVAL_LONG(params[1], type);
+        call_user_function(CG(function_table), NULL, callback, &retval, 2, params TSRMLS_CC);
+        ret = !zend_is_true(&retval);
+        zval_dtor(&retval);
+        zval_ptr_dtor(&params[0]);
+        zval_ptr_dtor(&params[1]);
+    }
     bstring_free(data);
-    return 0;
+    return ret;
 }
 
 zend_always_inline int sendData(http_parser_ext *resource, bstring *data TSRMLS_DC) {
@@ -31,12 +46,12 @@ zend_always_inline int sendData(http_parser_ext *resource, bstring *data TSRMLS_
     if(resource->parser_data.multipartHeader){
         bstring_append_p(&resource->parser_data.multipartHeaderData, data->val, data->len);
         if((headerpos = bstring_find_cstr(resource->parser_data.multipartHeaderData, ZEND_STRL("\r\n\r\n"))) >= 0){
-            if(multipartCallback(resource, bstring_make(resource->parser_data.multipartHeaderData->val, headerpos), TYPE_MULTIPART_HEADER)){
+            if(multipartCallback(resource, bstring_make(resource->parser_data.multipartHeaderData->val, headerpos), TYPE_MULTIPART_HEADER TSRMLS_CC)){
                 bstring_free(data);
                 return 1;
             }
             if(resource->parser_data.multipartHeaderData->len - headerpos - 4 > 0){
-                if(multipartCallback(resource, bstring_make(&resource->parser_data.multipartHeaderData->val[headerpos + 4], resource->parser_data.multipartHeaderData->len - headerpos - 4), TYPE_MULTIPART_CONTENT)){
+                if(multipartCallback(resource, bstring_make(&resource->parser_data.multipartHeaderData->val[headerpos + 4], resource->parser_data.multipartHeaderData->len - headerpos - 4), TYPE_MULTIPART_CONTENT TSRMLS_CC)){
                     bstring_free(data);
                     return 1;
                 }
@@ -47,7 +62,7 @@ zend_always_inline int sendData(http_parser_ext *resource, bstring *data TSRMLS_
         bstring_free(data);
         return 0;
     }
-    return multipartCallback(resource, data,  TYPE_MULTIPART_CONTENT TSRMLS_DC);
+    return multipartCallback(resource, data,  TYPE_MULTIPART_CONTENT TSRMLS_CC);
 }
 
 zend_always_inline int flushBufferData(http_parser_ext *resource TSRMLS_DC) {
@@ -109,6 +124,10 @@ zend_always_inline zval *parseBody(http_parser_ext *resource TSRMLS_DC) {
     zval *params[2];
     zval *parsedContent;
     MAKE_STD_ZVAL(parsedContent);
+    if(!resource->parser_data.body){
+        ZVAL_NULL(parsedContent);
+        return parsedContent;
+    }
     switch(resource->parser_data.contentType){
         case CONTENT_TYPE_URLENCODE:
             MAKE_STD_ZVAL(params[0]);
@@ -225,7 +244,7 @@ zend_always_inline void parseContentType(http_parser_ext *resource TSRMLS_DC) {
             resource->parser_data.multipartHeader = resource->parser_data.multipartEnd = 0;
         }
         return;
-    }    
+    }
 }
 
 zend_always_inline void parseRequest(http_parser_ext *resource TSRMLS_DC) {
