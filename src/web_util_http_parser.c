@@ -287,6 +287,21 @@ zend_always_inline void parseRequest(http_parser_ext *resource TSRMLS_DC) {
     add_assoc_zval(parsedData, "Query", parsedData_query);
 }
 
+zend_always_inline void parseResponse(http_parser_ext *resource TSRMLS_DC) {
+    char buf[8];
+    struct http_parser_url parser_url;
+    zval *parsedData = zend_read_property(CLASS_ENTRY(WebUtil_http_parser), &resource->object, ZEND_STRL("parsedData"), 0 TSRMLS_CC);
+    zval *parsedData_response;
+    MAKE_STD_ZVAL(parsedData_response);
+    array_init(parsedData_response);
+    add_assoc_long(parsedData_response, "Status-Code",  resource->parser.status_code);
+    add_assoc_string(parsedData_response, "Protocol",  "HTTP", 1);
+    snprintf(buf, sizeof(buf), "%d.%d", resource->parser.http_major, resource->parser.http_minor);
+    add_assoc_string(parsedData_response, "Protocol-Version",  buf, 1);
+    add_assoc_zval(parsedData, "Response", parsedData_response);
+}
+
+
 zend_always_inline void parseCookie(http_parser_ext *resource, const char *cookie_field TSRMLS_DC) {
     zval *parsedData = zend_read_property(CLASS_ENTRY(WebUtil_http_parser), &resource->object, ZEND_STRL("parsedData"), 0 TSRMLS_CC);
     zval *parsedData_header = fetchArrayElement(parsedData, ZEND_STRL("Header") + 1);
@@ -403,7 +418,25 @@ static int on_headers_complete_request(http_parser_ext *resource){
 }
 
 static int on_headers_complete_response(http_parser_ext *resource){
-    return 0;
+    TSRMLS_FETCH();
+    int ret = 0;
+    zval retval;
+    zval *parsedData = zend_read_property(CLASS_ENTRY(WebUtil_http_parser), &resource->object, ZEND_STRL("parsedData"), 0 TSRMLS_CC);
+    zval *callback = zend_read_property(CLASS_ENTRY(WebUtil_http_parser), &resource->object, ZEND_STRL("onHeaderParsedCallback"), 0 TSRMLS_CC);
+    zval *parsedData_header = fetchArrayElement(parsedData, ZEND_STRL("Header") + 1);
+    
+    
+    resetHeaderParser(resource TSRMLS_CC);
+    parseResponse(resource TSRMLS_CC);
+    parseContentType(resource TSRMLS_CC);
+    parseCookie(resource, "Set-Cookie" TSRMLS_CC);
+
+    if(!ZVAL_IS_NULL(callback)){
+        call_user_function(CG(function_table), NULL, callback, &retval, 1, &parsedData TSRMLS_CC);
+        ret = !zend_is_true(&retval);
+        zval_dtor(&retval);
+    }
+    return ret;
 }
 
 static int on_status(http_parser_ext *resource, const char *buf, size_t len){
