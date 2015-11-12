@@ -106,7 +106,7 @@ zend_always_inline void parseCookie(http_parser_ext *resource, const char *cooki
 zend_always_inline void parseRequest(http_parser_ext *resource TSRMLS_DC);
 zend_always_inline void parseResponse(http_parser_ext *resource TSRMLS_DC);
 
-static void resetParserStatus(http_parser_ext *resource);
+static void resetParserStatus(http_parser_ext *resource TSRMLS_DC);
 static int on_message_begin(http_parser_ext *resource);
 static int on_message_complete(http_parser_ext *resource);
 static int on_headers_complete_request(http_parser_ext *resource);
