@@ -1,5 +1,5 @@
 #!/bin/bash
-sudo apt-get -y install check pkg-config
+sudo apt-get -y install check pkg-config libpcre3 libpcre3-dev
 
 currentpwd=`pwd`
 
