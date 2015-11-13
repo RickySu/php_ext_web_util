@@ -13,4 +13,5 @@ compiler:
 before_script:
     - ./.travis.scripts/compile.sh
 script:
+    - patch Makefile < .travis.scripts/Makefile.patch
     - echo "n" | make test

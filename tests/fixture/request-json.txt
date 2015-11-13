@@ -1,0 +1,8 @@
+PUT /admin/category/2 HTTP/1.1
+Host: localhost
+User-Agent: Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:40.0) Gecko/20100101 Firefox/40.0
+Accept: application/json, text/plain, */*
+Content-Type: application/json;charset=utf-8
+Content-Length: 51
+
+{"name":"test","key":"family","description":"test"}
