@@ -1,5 +1,7 @@
 --TEST--
 Check for match method
+--SKIPIF--
+<?php include('skipif.inc')?>
 --FILE--
 <?php
 $r = new \WebUtil\R3();
