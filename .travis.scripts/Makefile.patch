@@ -1,0 +1,2 @@
+145a146
+> 		echo "extension=$(EXTENSION_DIR)/json.so" >> $(top_builddir)/tmp-php.ini; \
