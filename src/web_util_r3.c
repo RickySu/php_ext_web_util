@@ -44,13 +44,13 @@ void freeWebUtil_R3Resource(void *object TSRMLS_DC) {
     efree(resource);
 }
 
-zend_always_inline void initRoutes(zval *routes){
+static inline void initRoutes(zval *routes){
     if(IS_NULL == Z_TYPE_P(routes)){
         array_init(routes);
     }
 }
 
-zend_always_inline void extractRoute(zval *route, zval **pattern, zval **method, zval **data, zval **params){
+static inline void extractRoute(zval *route, zval **pattern, zval **method, zval **data, zval **params){
     zval **p_pattern, **p_method, **p_data, **p_params;
     *pattern = *method = *data = *params= NULL;
     if(zend_hash_index_find(Z_ARRVAL_P(route), 0, (void **) &p_pattern) == SUCCESS){
