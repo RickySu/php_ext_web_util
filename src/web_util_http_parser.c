@@ -43,6 +43,7 @@ zend_always_inline int multipartCallback(http_parser_ext *resource, bstring *dat
 
 zend_always_inline int sendData(http_parser_ext *resource, bstring *data TSRMLS_DC) {
     int headerpos, ret;
+
     if(resource->parser_data.multipartHeader){
         bstring_append_p(&resource->parser_data.multipartHeaderData, data->val, data->len);
         if((headerpos = bstring_find_cstr(resource->parser_data.multipartHeaderData, ZEND_STRL("\r\n\r\n"))) >= 0){
@@ -89,26 +90,28 @@ zend_always_inline int flushBufferData(http_parser_ext *resource TSRMLS_DC) {
         if(pos >= 0){
             if(pos > 0){
                 if(sendData(resource, bstring_make(resource->parser_data.body->val, pos) TSRMLS_CC)){
+                    UNSET_BSTRING(resource->parser_data.body);
                     return 1;
                 }
             }
             bstring_cuthead(resource->parser_data.body, pos + resource->parser_data.delimiter->len);
+
             resource->parser_data.multipartHeader = 1;
             if(bstring_find(resource->parser_data.body, resource->parser_data.delimiter) >= 0){
                 continue;
             }
         }
-
         if(resource->parser_data.multipartEnd){
-            if(sendData(resource, resource->parser_data.body TSRMLS_CC)){
+            if(sendData(resource, bstring_copy(resource->parser_data.body) TSRMLS_CC)){
+                UNSET_BSTRING(resource->parser_data.body);
                 return 1;
             }
             UNSET_BSTRING(resource->parser_data.body);
             break;
         }
-
         if(pos < 0 && resource->parser_data.body->len > resource->parser_data.delimiter->len){
             if(sendData(resource, bstring_make(resource->parser_data.body->val, resource->parser_data.body->len - resource->parser_data.delimiter->len) TSRMLS_CC)){
+                UNSET_BSTRING(resource->parser_data.body);
                 return 1;
             }
             bstring_cuthead(resource->parser_data.body, resource->parser_data.body->len - resource->parser_data.delimiter->len);

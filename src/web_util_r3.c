@@ -187,9 +187,7 @@ PHP_METHOD(WebUtil_R3, match){
     if(matched_route != NULL){
         r_route = (zval *) matched_route->data;
         MAKE_STD_ZVAL(params);
-        array_init(params);
-
-        
+        array_init(params);        
         for(i=0;i<entry->vars->len;i++){
             add_next_index_string(params, entry->vars->tokens[i], 1);
         }
@@ -206,6 +204,8 @@ PHP_METHOD(WebUtil_R3, match){
             zval_dtor(&function_name);
             add_next_index_zval(return_value, retval);
         }
+        zval_ptr_dtor(&params);
     }
-    efree(entry);    
+    match_entry_free(entry);    
+    efree(c_uri);
 }
