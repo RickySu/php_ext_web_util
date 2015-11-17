@@ -15,4 +15,6 @@ before_script:
 script:
     - phpize
     - ./configure --with-libdir=lib/x86_64-linux-gnu --with-pcre-dir=/usr
+    - make thirdparty/build/lib/libhttp_parser.o
+    - make
     - echo "n" | make test
