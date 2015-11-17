@@ -11,7 +11,8 @@ compiler:
     - gcc
 
 before_script:
-    - ./.travis.scripts/compile.sh
+    - git submodule update --init
 script:
-    - patch Makefile < .travis.scripts/Makefile.patch
+    - phpize
+    - ./configure --with-libdir=lib/x86_64-linux-gnu --with-pcre-dir=/usr
     - echo "n" | make test
