@@ -16,4 +16,4 @@ script:
     - phpize
     - ./configure --with-libdir=lib/x86_64-linux-gnu --with-pcre-dir=/usr
     - make
-    - echo "n" | make test
+    - NO_INTERACTION=1 make test
