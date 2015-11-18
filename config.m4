@@ -36,8 +36,8 @@ PHP_NEW_EXTENSION(php_ext_web_util, $MODULES, $ext_shared)
 
 PHP_ADD_MAKEFILE_FRAGMENT([Makefile.thirdparty])
 
-PHP_EXT_WEB_UTIL_SHARED_DEPENDENCIES="$THIRDPARTY_BUILD_DIR/lib/libhttp_parser.o"
-EXTRA_LDFLAGS="$EXTRA_LDFLAGS $THIRDPARTY_BUILD_DIR/lib/libhttp_parser.o"
+dnl PHP_EXT_WEB_UTIL_SHARED_DEPENDENCIES="$THIRDPARTY_BUILD_DIR/lib/libhttp_parser.o"
+dnl EXTRA_LDFLAGS="$EXTRA_LDFLAGS $THIRDPARTY_BUILD_DIR/lib/libhttp_parser.o"
 
   AC_CHECK_DECL(
     [HAVE_BUNDLED_PCRE],
@@ -45,7 +45,6 @@ EXTRA_LDFLAGS="$EXTRA_LDFLAGS $THIRDPARTY_BUILD_DIR/lib/libhttp_parser.o"
       [ext/pcre/php_pcre.h],
       [
         PHP_ADD_EXTENSION_DEP([r3], [pcre])
-        AC_DEFINE([ZEPHIR_USE_PHP_PCRE], [1], [Whether PHP pcre extension is present at compile time])
       ],
       ,
       [[#include "main/php.h"]]
@@ -90,6 +89,6 @@ EXTRA_LDFLAGS="$EXTRA_LDFLAGS $THIRDPARTY_BUILD_DIR/lib/libhttp_parser.o"
       PHP_ADD_LIBRARY_WITH_PATH(pcre, $PCRE_LIBDIR, PHP_EXT_WEB_UTIL_SHARED_LIBADD)
     ], [[#include "php_config.h"]]
   )
-
+shared_objects_php_ext_web_util="$THIRDPARTY_BUILD_DIR/lib/libhttp_parser.o $shared_objects_php_ext_web_util"
 PHP_SUBST(PHP_EXT_WEB_UTIL_SHARED_LIBADD)
-PHP_SUBST(PHP_EXT_WEB_UTIL_SHARED_DEPENDENCIES)
+dnl PHP_SUBST(PHP_EXT_WEB_UTIL_SHARED_DEPENDENCIES)
