@@ -55,6 +55,12 @@ ZEND_BEGIN_ARG_INFO(ARGINFO(WebUtil_http_parser, setOnMultipartCallback), 0)
     ZEND_ARG_INFO(0, cb)
 ZEND_END_ARG_INFO()
 
+typedef struct http_parser_func_s {
+    zval func;
+    zend_fcall_info fci;
+    zend_fcall_info_cache fcc;
+} http_parser_func_t;
+
 typedef struct http_parser_ext_s{
     http_parser parser;
     struct {
@@ -71,12 +77,16 @@ typedef struct http_parser_ext_s{
         int multipartEnd;
     } parser_data;
     enum http_parser_type parserType;
+    http_parser_func_t onHeaderParsedCallback;
+    http_parser_func_t onBodyParsedCallback;
+    http_parser_func_t onContentPieceCallback;
+    http_parser_func_t onMultipartCallback;
     zval object;
     zend_object zo;
 } http_parser_ext;
 
 static zend_object *createWebUtil_http_parserResource(zend_class_entry *class_type);
-void freeWebUtil_http_parserResource(void *object);
+void freeWebUtil_http_parserResource(zend_object *object);
 
 PHP_METHOD(WebUtil_http_parser, __construct);
 PHP_METHOD(WebUtil_http_parser, feed);
@@ -97,15 +107,18 @@ DECLARE_FUNCTION_ENTRY(WebUtil_http_parser) = {
     PHP_FE_END
 };
 
-static inline int multipartCallback(http_parser_ext *resource, bstring *data, int type);
-static inline int sendData(http_parser_ext *parser, bstring *data);
-static inline int flushBufferData(http_parser_ext *parser);
-static inline zval parseBody(http_parser_ext *resource);
-static inline void parseContentType(http_parser_ext *resource);
-static inline void parseCookie(http_parser_ext *resource, const char *cookie_field);
-static inline void parseRequest(http_parser_ext *resource);
-static inline void parseResponse(http_parser_ext *resource);
-static inline void releaseParser(http_parser_ext *resource);
+static zend_always_inline int fci_call_function(http_parser_func_t *func, zval *retval, uint32_t param_count, zval *params);
+static zend_always_inline void registerFunctionCache(http_parser_func_t *func, zval *cb);
+static zend_always_inline void releaseFunctionCache(http_parser_ext *resource);
+static zend_always_inline int multipartCallback(http_parser_ext *resource, bstring *data, int type);
+static zend_always_inline int sendData(http_parser_ext *parser, bstring *data);
+static zend_always_inline int flushBufferData(http_parser_ext *parser);
+static zend_always_inline zval parseBody(http_parser_ext *resource);
+static zend_always_inline void parseContentType(http_parser_ext *resource);
+static zend_always_inline void parseCookie(http_parser_ext *resource, const char *cookie_field);
+static zend_always_inline void parseRequest(http_parser_ext *resource);
+static zend_always_inline void parseResponse(http_parser_ext *resource);
+static zend_always_inline void releaseParser(http_parser_ext *resource);
 
 static void resetParserStatus(http_parser_ext *resource);
 static int on_message_begin(http_parser_ext *resource);

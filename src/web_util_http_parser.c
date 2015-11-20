@@ -5,9 +5,42 @@ static const char s_application_json[] = "application/json";
 static const char s_multipart_form_data[] = "multipart/form-data";
 static const char s_boundary_equal[] = "boundary=";
 
+static zend_always_inline int fci_call_function(http_parser_func_t *func, zval *retval, uint32_t param_count, zval *params){
+    func->fci.params = params;
+    func->fci.retval = retval;
+    func->fci.param_count = param_count;
+    zend_call_function(&func->fci, &func->fcc);
+    return 0;
+}
+
+static zend_always_inline void registerFunctionCache(http_parser_func_t *func, zval *cb){
+    char *errstr = NULL;
+    if (zend_fcall_info_init(cb, 0, &func->fci, &func->fcc, NULL, &errstr) == FAILURE) {
+        php_error_docref(NULL, E_WARNING, "param cb is not callable");
+    }
+    Z_ADDREF_P(cb);
+    zval_dtor(&func->func);
+    ZVAL_COPY_VALUE(&func->func ,cb);
+}
+
+static zend_always_inline void initFunctionCache(http_parser_ext *resource){
+    ZVAL_NULL(&resource->onHeaderParsedCallback.func);
+    ZVAL_NULL(&resource->onBodyParsedCallback.func);
+    ZVAL_NULL(&resource->onContentPieceCallback.func);
+    ZVAL_NULL(&resource->onMultipartCallback.func);
+}
+
+static zend_always_inline void releaseFunctionCache(http_parser_ext *resource){
+    zval_dtor(&resource->onHeaderParsedCallback.func);
+    zval_dtor(&resource->onBodyParsedCallback.func);
+    zval_dtor(&resource->onContentPieceCallback.func);
+    zval_dtor(&resource->onMultipartCallback.func);
+}
+
 #define SETTER_METHOD(ce, me, pn) \
 PHP_METHOD(ce, me) { \
     zval *self = getThis(); \
+    http_parser_ext *resource = FETCH_OBJECT_RESOURCE(self, http_parser_ext); \
     zval *cb; \
     zval *oldcb; \
     zval rv; \
@@ -17,21 +50,17 @@ PHP_METHOD(ce, me) { \
     if(!zend_is_callable(cb, 0, NULL)) { \
         php_error_docref(NULL, E_WARNING, "param cb is not callable"); \
     } \
-    oldcb = zend_read_property(CLASS_ENTRY(ce), self, ZEND_STRL(#pn), 0, &rv); \
-    RETVAL_ZVAL(oldcb, 1, 0); \
-    zend_update_property(CLASS_ENTRY(ce), self, ZEND_STRL(#pn), cb); \
+    registerFunctionCache(&resource->pn, cb); \
 }
 
-static inline int multipartCallback(http_parser_ext *resource, bstring *data, int type) {
+static zend_always_inline int multipartCallback(http_parser_ext *resource, bstring *data, int type) {
     int ret = 0;
-    zval rv;
     zval retval;
     zval params[2];
-    zval *callback = zend_read_property(CLASS_ENTRY(WebUtil_http_parser), &resource->object, ZEND_STRL("onMultipartCallback"), 0, &rv);
-    if(!ZVAL_IS_NULL(callback)){
+    if(!Z_ISNULL(resource->onMultipartCallback.func)){
         ZVAL_STRINGL(&params[0], data->val, data->len);
         ZVAL_LONG(&params[1], type);
-        call_user_function(CG(function_table), NULL, callback, &retval, 2, params);
+        fci_call_function(&resource->onMultipartCallback, &retval, 2, params);
         ret = !zend_is_true(&retval);
         zval_dtor(&retval);
         zval_dtor(&params[0]);
@@ -41,7 +70,7 @@ static inline int multipartCallback(http_parser_ext *resource, bstring *data, in
     return ret;
 }
 
-static inline int sendData(http_parser_ext *resource, bstring *data) {
+static zend_always_inline int sendData(http_parser_ext *resource, bstring *data) {
     int headerpos, ret;
 
     if(resource->parser_data.multipartHeader){
@@ -66,7 +95,7 @@ static inline int sendData(http_parser_ext *resource, bstring *data) {
     return multipartCallback(resource, data,  TYPE_MULTIPART_CONTENT);
 }
 
-static inline int flushBufferData(http_parser_ext *resource) {
+static zend_always_inline int flushBufferData(http_parser_ext *resource) {
     int pos, end_pos;
 
     if(resource->parser_data.multipartEnd){
@@ -137,7 +166,7 @@ static zend_always_inline zval parse_str(const char *data, size_t data_len){
     return params[1];
 }
 
-static inline zval parseBody(http_parser_ext *resource) {
+static zend_always_inline zval parseBody(http_parser_ext *resource) {
     zval fn, retval;
     zval params[2];
     zval parsedContent;
@@ -160,7 +189,7 @@ static inline zval parseBody(http_parser_ext *resource) {
     return parsedContent;
 }
 
-static inline zval *fetchArrayElement_ex(zval *arr, const char *str, size_t str_len, int init) {
+static zend_always_inline zval *fetchArrayElement_ex(zval *arr, const char *str, size_t str_len, int init) {
     zval *tmp;
     
     if(tmp = zend_hash_str_find(HASH_OF(arr), str, str_len)){
@@ -175,11 +204,11 @@ static inline zval *fetchArrayElement_ex(zval *arr, const char *str, size_t str_
     return tmp;
 }
 
-static inline zval *fetchArrayElement(zval *arr, const char *str, size_t str_len) {
+static zend_always_inline zval *fetchArrayElement(zval *arr, const char *str, size_t str_len) {
     return fetchArrayElement_ex(arr, str, str_len, 1);
 }
 
-static inline void resetHeaderParser(http_parser_ext *resource){
+static zend_always_inline void resetHeaderParser(http_parser_ext *resource){
     zval rv;
     zval *parsedData = zend_read_property(CLASS_ENTRY(WebUtil_http_parser), &resource->object, ZEND_STRL("parsedData"), 0, &rv);
     zval *parsedData_header = fetchArrayElement(parsedData, ZEND_STRL("Header"));
@@ -194,7 +223,7 @@ static inline void resetHeaderParser(http_parser_ext *resource){
     }
 }
 
-static inline void releaseParser(http_parser_ext *resource) {
+static zend_always_inline void releaseParser(http_parser_ext *resource) {
     UNSET_BSTRING(resource->parser_data.url);
     UNSET_BSTRING(resource->parser_data.header);
     UNSET_BSTRING(resource->parser_data.field);
@@ -204,7 +233,7 @@ static inline void releaseParser(http_parser_ext *resource) {
     UNSET_BSTRING(resource->parser_data.delimiterClose);
 }
 
-static inline void resetParserStatus(http_parser_ext *resource) {
+static zend_always_inline void resetParserStatus(http_parser_ext *resource) {
     zval rv;
     zval *parsedData = zend_read_property(CLASS_ENTRY(WebUtil_http_parser), &resource->object, ZEND_STRL("parsedData"), 0, &rv);
     if(Z_TYPE_P(parsedData) != IS_ARRAY){
@@ -219,7 +248,7 @@ static inline void resetParserStatus(http_parser_ext *resource) {
     releaseParser(resource);
 }
 
-static inline void parseContentType(http_parser_ext *resource) {
+static zend_always_inline void parseContentType(http_parser_ext *resource) {
     zval rv;
     zval *parsedData = zend_read_property(CLASS_ENTRY(WebUtil_http_parser), &resource->object, ZEND_STRL("parsedData"), 0, &rv);
     zval *parsedData_header = fetchArrayElement(parsedData, ZEND_STRL("Header"));
@@ -258,7 +287,7 @@ static inline void parseContentType(http_parser_ext *resource) {
     }
 }
 
-static inline void parseRequest(http_parser_ext *resource) {
+static zend_always_inline void parseRequest(http_parser_ext *resource) {
     char buf[8];
     struct http_parser_url parser_url;
     zval rv;
@@ -288,7 +317,7 @@ static inline void parseRequest(http_parser_ext *resource) {
     }
 }
 
-static inline void parseResponse(http_parser_ext *resource) {
+static zend_always_inline void parseResponse(http_parser_ext *resource) {
     char buf[8];
     zval rv;
     struct http_parser_url parser_url;
@@ -303,7 +332,7 @@ static inline void parseResponse(http_parser_ext *resource) {
 }
 
 
-static inline void parseCookie(http_parser_ext *resource, const char *cookie_field) {
+static zend_always_inline void parseCookie(http_parser_ext *resource, const char *cookie_field) {
     zval rv;
     zval *parsedData = zend_read_property(CLASS_ENTRY(WebUtil_http_parser), &resource->object, ZEND_STRL("parsedData"), 0, &rv);
     zval *parsedData_header = fetchArrayElement(parsedData, ZEND_STRL("Header"));
@@ -342,7 +371,7 @@ static inline void parseCookie(http_parser_ext *resource, const char *cookie_fie
             else{
                 zval s, *sp;
                 key = bstring_make(&cookieString[field_start], token_equal_pos - field_start);
-                add_assoc_stringl(&cookie, key->val, &cookieString[token_equal_pos + 1], token_semi_pos - token_equal_pos - 1);
+                add_assoc_stringl(&cookie, key->val, (char *) &cookieString[token_equal_pos + 1], token_semi_pos - token_equal_pos - 1);
                 bstring_free(key);
             }
             field_start = i + 2;
@@ -382,11 +411,10 @@ static int on_message_begin(http_parser_ext *resource){
 
 static int on_message_complete(http_parser_ext *resource){
     int ret = 0;
-    zval retval, rv;
-    zval *callback = zend_read_property(CLASS_ENTRY(WebUtil_http_parser), &resource->object, ZEND_STRL("onBodyParsedCallback"), 0, &rv);
+    zval retval;
     zval parsedBody = parseBody(resource);
-    if(!ZVAL_IS_NULL(callback)){
-        call_user_function(CG(function_table), NULL, callback, &retval, 1, &parsedBody);
+    if(!Z_ISNULL(resource->onBodyParsedCallback.func)){
+        fci_call_function(&resource->onBodyParsedCallback, &retval, 1, &parsedBody);
         ret = !zend_is_true(&retval);
         zval_dtor(&retval);
     }
@@ -400,15 +428,14 @@ static int on_headers_complete_request(http_parser_ext *resource){
     int ret = 0;
     zval retval, rv;
     zval *parsedData = zend_read_property(CLASS_ENTRY(WebUtil_http_parser), &resource->object, ZEND_STRL("parsedData"), 0, &rv);
-    zval *callback = zend_read_property(CLASS_ENTRY(WebUtil_http_parser), &resource->object, ZEND_STRL("onHeaderParsedCallback"), 0, &rv);
     zval *parsedData_header = fetchArrayElement(parsedData, ZEND_STRL("Header"));
     
     resetHeaderParser(resource);
     parseRequest(resource);
     parseContentType(resource);
     parseCookie(resource, "Cookie");
-    if(!ZVAL_IS_NULL(callback)){
-        call_user_function(CG(function_table), NULL, callback, &retval, 1, parsedData);
+    if(!Z_ISNULL(resource->onHeaderParsedCallback.func)){
+        fci_call_function(&resource->onHeaderParsedCallback, &retval, 1, parsedData);
         ret = !zend_is_true(&retval);
         zval_dtor(&retval);
     }
@@ -427,8 +454,8 @@ static int on_headers_complete_response(http_parser_ext *resource){
     parseContentType(resource);
     parseCookie(resource, "Set-Cookie");
 
-    if(!ZVAL_IS_NULL(callback)){
-        call_user_function(CG(function_table), NULL, callback, &retval, 1, parsedData);
+    if(!Z_ISNULL(resource->onHeaderParsedCallback.func)){
+        fci_call_function(&resource->onHeaderParsedCallback, &retval, 1, parsedData);
         ret = !zend_is_true(&retval);
         zval_dtor(&retval);
     }
@@ -458,13 +485,12 @@ static int on_header_value(http_parser_ext *resource, const char *buf, size_t le
 
 static int on_response_body(http_parser_ext *resource, const char *buf, size_t len){
     int ret = 0;
-    zval retval, rv;
+    zval retval;
     zval param;
-    zval *callback = zend_read_property(CLASS_ENTRY(WebUtil_http_parser), &resource->object, ZEND_STRL("onContentPieceCallback"), 0, &rv);
 
-    if(!ZVAL_IS_NULL(callback)){
+    if(!Z_ISNULL(resource->onContentPieceCallback.func)){
         ZVAL_STRINGL(&param, buf, len);
-        call_user_function(CG(function_table), NULL, callback, &retval, 1, &param);
+        fci_call_function(&resource->onContentPieceCallback, &retval, 1, &param);
         ret = !zend_is_true(&retval);
         zval_dtor(&retval);
         zval_dtor(&param);
@@ -481,13 +507,12 @@ static int on_response_body(http_parser_ext *resource, const char *buf, size_t l
 
 static int on_request_body(http_parser_ext *resource, const char *buf, size_t len){
     int ret = 0;
-    zval retval, rv;
+    zval retval;
     zval param;
-    zval *callback = zend_read_property(CLASS_ENTRY(WebUtil_http_parser), &resource->object, ZEND_STRL("onContentPieceCallback"), 0, &rv);
 
-    if(!ZVAL_IS_NULL(callback)){
+    if(!Z_ISNULL(resource->onContentPieceCallback.func)){
         ZVAL_STRINGL(&param, buf, len);
-        call_user_function(CG(function_table), NULL, callback, &retval, 1, &param);
+        fci_call_function(&resource->onContentPieceCallback, &retval, 1, &param);
         ret = !zend_is_true(&retval);
         zval_dtor(&retval);
         zval_dtor(&param);
@@ -526,15 +551,16 @@ static zend_object *createWebUtil_http_parserResource(zend_class_entry *ce) {
     resource = ALLOC_RESOURCE(http_parser_ext);
     zend_object_std_init(&resource->zo, ce);
     object_properties_init(&resource->zo, ce);
-
+    initFunctionCache(resource);
     resource->zo.handlers = &OBJECT_HANDLER(WebUtil_http_parser);
     return &resource->zo;
 }
 
-void freeWebUtil_http_parserResource(void *object) {
+void freeWebUtil_http_parserResource(zend_object *object) {
     http_parser_ext *resource;
     resource = FETCH_RESOURCE(object, http_parser_ext);
     releaseParser(resource);
+    releaseFunctionCache(resource);
     zend_object_std_dtor(&resource->zo);
     efree(resource);
 }
@@ -579,3 +605,4 @@ SETTER_METHOD(WebUtil_http_parser, setOnHeaderParsedCallback, onHeaderParsedCall
 SETTER_METHOD(WebUtil_http_parser, setOnBodyParsedCallback, onBodyParsedCallback)
 SETTER_METHOD(WebUtil_http_parser, setOnContentPieceCallback, onContentPieceCallback)
 SETTER_METHOD(WebUtil_http_parser, setOnMultipartCallback, onMultipartCallback)
+
