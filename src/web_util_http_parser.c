@@ -42,13 +42,8 @@ PHP_METHOD(ce, me) { \
     zval *self = getThis(); \
     http_parser_ext *resource = FETCH_OBJECT_RESOURCE(self, http_parser_ext); \
     zval *cb; \
-    zval *oldcb; \
-    zval rv; \
     if(FAILURE == zend_parse_parameters(ZEND_NUM_ARGS(), "z", &cb)) { \
         return; \
-    } \
-    if(!zend_is_callable(cb, 0, NULL)) { \
-        php_error_docref(NULL, E_WARNING, "param cb is not callable"); \
     } \
     registerFunctionCache(&resource->pn, cb); \
 }
