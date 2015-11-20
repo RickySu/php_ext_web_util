@@ -22,8 +22,8 @@ typedef struct web_util_r3_s{
     zend_object zo;
 } web_util_r3_t;
 
-static zend_object_value createWebUtil_R3Resource(zend_class_entry *class_type TSRMLS_DC);
-void freeWebUtil_R3Resource(void *object TSRMLS_DC);
+static zend_object *createWebUtil_R3Resource(zend_class_entry *ce);
+void freeWebUtil_R3Resource(zend_object *object);
 
 PHP_METHOD(WebUtil_R3, addRoute);
 PHP_METHOD(WebUtil_R3, compile);

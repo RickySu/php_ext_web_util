@@ -23,10 +23,10 @@
     static zend_function_entry FUNCTION_ENTRY(name)[]
 
 #define REGISTER_INTERNAL_CLASS(name) \
-    CLASS_ENTRY(name) = zend_register_internal_class_ex(&ce, NULL, NULL TSRMLS_CC)
+    CLASS_ENTRY(name) = zend_register_internal_class_ex(&ce, NULL)
     
 #define REGISTER_INTERNAL_CLASS_EX(name, base) \
-    CLASS_ENTRY(name) = zend_register_internal_class_ex(&ce, CLASS_ENTRY(base), NULL TSRMLS_CC)
+    CLASS_ENTRY(name) = zend_register_internal_class_ex(&ce, CLASS_ENTRY(base))
 
 #define INIT_CLASS_WITH_OBJECT_NEW(name, ns_name, create_function) \
     zend_class_entry ce; \
@@ -56,15 +56,16 @@
 #define ARGINFO(classname, method) \
     arginfo_##classname##_##method
 
-#ifndef offsetof
-#define offsetof(s,memb) ((size_t)((char *)&((s *)0)->memb-(char *)0))
-#endif
+#define FETCH_RESOURCE(pointer, type) (type *) ((void *)pointer - XtOffsetOf(type, zo))
 
-#define FETCH_RESOURCE(pointer, type) (type *) (pointer - offsetof(type, zo))
-    
-#define FETCH_OBJECT_RESOURCE(object, type) FETCH_RESOURCE(zend_object_store_get_object(object TSRMLS_CC), type)
+#define FETCH_RESOURCE_FROM_EXTEND(pointer, item, type) (type *) ((void *)pointer - XtOffsetOf(type, item))
+
+#define FETCH_OBJECT_RESOURCE(object, type) FETCH_RESOURCE(Z_OBJ_P(object), type)
 
 #define REGISTER_CLASS_CONSTANT_LONG(class, name) \
-    zend_declare_class_constant_long(CLASS_ENTRY(class), ZEND_STRL(#name), name TSRMLS_CC)
+    zend_declare_class_constant_long(CLASS_ENTRY(class), ZEND_STRL(#name), name)
+
+#define ALLOC_RESOURCE(x) \
+    ((x *) ecalloc(1, sizeof(x) + zend_object_properties_size(ce)))
 
 #endif

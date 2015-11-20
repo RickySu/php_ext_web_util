@@ -75,8 +75,8 @@ typedef struct http_parser_ext_s{
     zend_object zo;
 } http_parser_ext;
 
-static zend_object_value createWebUtil_http_parserResource(zend_class_entry *class_type TSRMLS_DC);
-void freeWebUtil_http_parserResource(void *object TSRMLS_DC);
+static zend_object *createWebUtil_http_parserResource(zend_class_entry *class_type);
+void freeWebUtil_http_parserResource(void *object);
 
 PHP_METHOD(WebUtil_http_parser, __construct);
 PHP_METHOD(WebUtil_http_parser, feed);
@@ -97,17 +97,17 @@ DECLARE_FUNCTION_ENTRY(WebUtil_http_parser) = {
     PHP_FE_END
 };
 
-static inline int multipartCallback(http_parser_ext *resource, bstring *data, int type TSRMLS_DC);
-static inline int sendData(http_parser_ext *parser, bstring *data TSRMLS_DC);
-static inline int flushBufferData(http_parser_ext *parser TSRMLS_DC);
-static inline zval *parseBody(http_parser_ext *resource TSRMLS_DC);
-static inline void parseContentType(http_parser_ext *resource TSRMLS_DC);
-static inline void parseCookie(http_parser_ext *resource, const char *cookie_field TSRMLS_DC);
-static inline void parseRequest(http_parser_ext *resource TSRMLS_DC);
-static inline void parseResponse(http_parser_ext *resource TSRMLS_DC);
+static inline int multipartCallback(http_parser_ext *resource, bstring *data, int type);
+static inline int sendData(http_parser_ext *parser, bstring *data);
+static inline int flushBufferData(http_parser_ext *parser);
+static inline zval parseBody(http_parser_ext *resource);
+static inline void parseContentType(http_parser_ext *resource);
+static inline void parseCookie(http_parser_ext *resource, const char *cookie_field);
+static inline void parseRequest(http_parser_ext *resource);
+static inline void parseResponse(http_parser_ext *resource);
 static inline void releaseParser(http_parser_ext *resource);
 
-static void resetParserStatus(http_parser_ext *resource TSRMLS_DC);
+static void resetParserStatus(http_parser_ext *resource);
 static int on_message_begin(http_parser_ext *resource);
 static int on_message_complete(http_parser_ext *resource);
 static int on_headers_complete_request(http_parser_ext *resource);
