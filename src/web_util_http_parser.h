@@ -2,6 +2,7 @@
 #define _WEB_UTIL_HTTP_PARSER_H
 #include "../php_ext_web_util.h"
 #include "php_variables.h"
+#include "fcall_info.h"
 #include "util.h"
 #include "bstring.h"
 #include <http_parser.h>
@@ -55,12 +56,6 @@ ZEND_BEGIN_ARG_INFO(ARGINFO(WebUtil_http_parser, setOnMultipartCallback), 0)
     ZEND_ARG_INFO(0, cb)
 ZEND_END_ARG_INFO()
 
-typedef struct http_parser_func_s {
-    zval func;
-    zend_fcall_info fci;
-    zend_fcall_info_cache fcc;
-} http_parser_func_t;
-
 typedef struct http_parser_ext_s{
     http_parser parser;
     struct {
@@ -77,11 +72,11 @@ typedef struct http_parser_ext_s{
         int multipartEnd;
     } parser_data;
     enum http_parser_type parserType;
-    http_parser_func_t onHeaderParsedCallback;
-    http_parser_func_t onBodyParsedCallback;
-    http_parser_func_t onContentPieceCallback;
-    http_parser_func_t onMultipartCallback;
-    http_parser_func_t parse_str;
+    fcall_info_t onHeaderParsedCallback;
+    fcall_info_t onBodyParsedCallback;
+    fcall_info_t onContentPieceCallback;
+    fcall_info_t onMultipartCallback;
+    fcall_info_t parse_str;
     zval object;
     zend_object zo;
 } http_parser_ext;
@@ -108,8 +103,8 @@ DECLARE_FUNCTION_ENTRY(WebUtil_http_parser) = {
     PHP_FE_END
 };
 
-static zend_always_inline int fci_call_function(http_parser_func_t *func, zval *retval, uint32_t param_count, zval *params);
-static zend_always_inline void registerFunctionCache(http_parser_func_t *func, zval *cb);
+static zend_always_inline int fci_call_function(fcall_info_t *func, zval *retval, uint32_t param_count, zval *params);
+static zend_always_inline void registerFunctionCache(fcall_info_t *func, zval *cb);
 static zend_always_inline void releaseFunctionCache(http_parser_ext *resource);
 static zend_always_inline int multipartCallback(http_parser_ext *resource, bstring *data, int type);
 static zend_always_inline int sendData(http_parser_ext *parser, bstring *data);

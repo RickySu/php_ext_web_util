@@ -5,24 +5,6 @@ static const char s_application_json[] = "application/json";
 static const char s_multipart_form_data[] = "multipart/form-data";
 static const char s_boundary_equal[] = "boundary=";
 
-static zend_always_inline int fci_call_function(http_parser_func_t *func, zval *retval, uint32_t param_count, zval *params){
-    func->fci.params = params;
-    func->fci.retval = retval;
-    func->fci.param_count = param_count;
-    zend_call_function(&func->fci, &func->fcc);
-    return 0;
-}
-
-static zend_always_inline void registerFunctionCache(http_parser_func_t *func, zval *cb){
-    char *errstr = NULL;
-    if (zend_fcall_info_init(cb, 0, &func->fci, &func->fcc, NULL, &errstr) == FAILURE) {
-        php_error_docref(NULL, E_WARNING, "param cb is not callable");
-    }
-    Z_ADDREF_P(cb);
-    zval_dtor(&func->func);
-    ZVAL_COPY_VALUE(&func->func ,cb);
-}
-
 static zend_always_inline void initFunctionCache(http_parser_ext *resource){
     ZVAL_NULL(&resource->onHeaderParsedCallback.func);
     ZVAL_NULL(&resource->onBodyParsedCallback.func);
@@ -31,11 +13,11 @@ static zend_always_inline void initFunctionCache(http_parser_ext *resource){
 }
 
 static zend_always_inline void releaseFunctionCache(http_parser_ext *resource){
-    zval_dtor(&resource->onHeaderParsedCallback.func);
-    zval_dtor(&resource->onBodyParsedCallback.func);
-    zval_dtor(&resource->onContentPieceCallback.func);
-    zval_dtor(&resource->onMultipartCallback.func);
-    zval_dtor(&resource->parse_str.func);
+    freeFunctionCache(&resource->onHeaderParsedCallback);
+    freeFunctionCache(&resource->onBodyParsedCallback);
+    freeFunctionCache(&resource->onContentPieceCallback);
+    freeFunctionCache(&resource->onMultipartCallback);
+    freeFunctionCache(&resource->parse_str);
 }
 
 #define SETTER_METHOD(ce, me, pn) \
@@ -147,7 +129,7 @@ static zend_always_inline int flushBufferData(http_parser_ext *resource) {
     return 0;
 }
 
-static zend_always_inline zval parse_str(const char *data, size_t data_len, http_parser_func_t *parse_str_func){
+static zend_always_inline zval parse_str(const char *data, size_t data_len, fcall_info_t *parse_str_func){
     zval retval;
     zval params[2];
     ZVAL_STRINGL(&params[0], data, data_len);
@@ -158,19 +140,6 @@ static zend_always_inline zval parse_str(const char *data, size_t data_len, http
     zval_dtor(&params[0]);
     zval_dtor(&retval);
     return params[1];
-/*
-    zval retval, fn;
-    zval params[2];
-    ZVAL_STRING(&fn, "parse_str");
-    ZVAL_STRINGL(&params[0], data, data_len);
-    array_init(&params[1]);
-    ZVAL_MAKE_REF(&params[1]);
-    call_user_function(CG(function_table), NULL, &fn, &retval, 2, params);
-    ZVAL_UNREF(&params[1]);
-    zval_dtor(&fn);
-    zval_dtor(&params[0]);
-    zval_dtor(&retval);
-    return params[1];*/
 }
 
 static zend_always_inline zval parseBody(http_parser_ext *resource) {
