@@ -91,4 +91,3 @@ dnl EXTRA_LDFLAGS="$EXTRA_LDFLAGS $THIRDPARTY_BUILD_DIR/lib/libhttp_parser.o"
   )
 shared_objects_php_ext_web_util="$THIRDPARTY_BUILD_DIR/lib/libhttp_parser.o $shared_objects_php_ext_web_util"
 PHP_SUBST(PHP_EXT_WEB_UTIL_SHARED_LIBADD)
-dnl PHP_SUBST(PHP_EXT_WEB_UTIL_SHARED_DEPENDENCIES)
