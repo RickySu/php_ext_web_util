@@ -35,6 +35,7 @@ static zend_always_inline void releaseFunctionCache(http_parser_ext *resource){
     zval_dtor(&resource->onBodyParsedCallback.func);
     zval_dtor(&resource->onContentPieceCallback.func);
     zval_dtor(&resource->onMultipartCallback.func);
+    zval_dtor(&resource->parse_str.func);
 }
 
 #define SETTER_METHOD(ce, me, pn) \
@@ -146,7 +147,18 @@ static zend_always_inline int flushBufferData(http_parser_ext *resource) {
     return 0;
 }
 
-static zend_always_inline zval parse_str(const char *data, size_t data_len){
+static zend_always_inline zval parse_str(const char *data, size_t data_len, http_parser_func_t *parse_str_func){
+    zval retval;
+    zval params[2];
+    ZVAL_STRINGL(&params[0], data, data_len);
+    array_init(&params[1]);
+    ZVAL_MAKE_REF(&params[1]);
+    fci_call_function(parse_str_func, &retval, 2, params);
+    ZVAL_UNREF(&params[1]);
+    zval_dtor(&params[0]);
+    zval_dtor(&retval);
+    return params[1];
+/*
     zval retval, fn;
     zval params[2];
     ZVAL_STRING(&fn, "parse_str");
@@ -158,7 +170,7 @@ static zend_always_inline zval parse_str(const char *data, size_t data_len){
     zval_dtor(&fn);
     zval_dtor(&params[0]);
     zval_dtor(&retval);
-    return params[1];
+    return params[1];*/
 }
 
 static zend_always_inline zval parseBody(http_parser_ext *resource) {
@@ -172,7 +184,7 @@ static zend_always_inline zval parseBody(http_parser_ext *resource) {
     }
     switch(resource->parser_data.contentType){
         case CONTENT_TYPE_URLENCODE:
-            retval = parse_str(resource->parser_data.body->val, resource->parser_data.body->len);
+            retval = parse_str(resource->parser_data.body->val, resource->parser_data.body->len, &resource->parse_str);
             ZVAL_COPY_VALUE(&parsedContent, &retval);
             break;
         case CONTENT_TYPE_JSONENCODE:
@@ -304,7 +316,7 @@ static zend_always_inline void parseRequest(http_parser_ext *resource) {
 
     if(parser_url.field_data[UF_QUERY].len){
         zval retval;
-        retval = parse_str(&resource->parser_data.url->val[parser_url.field_data[UF_QUERY].off], parser_url.field_data[UF_QUERY].len);
+        retval = parse_str(&resource->parser_data.url->val[parser_url.field_data[UF_QUERY].off], parser_url.field_data[UF_QUERY].len, &resource->parse_str);
         add_assoc_zval(&parsedData_query, "Param", &retval);
     }
     else{
@@ -527,7 +539,6 @@ static int on_request_body(http_parser_ext *resource, const char *buf, size_t le
 }
 
 CLASS_ENTRY_FUNCTION_D(WebUtil_http_parser){
-    zval *array;
     REGISTER_CLASS_WITH_OBJECT_NEW(WebUtil_http_parser, "WebUtil\\Parser\\HttpParser", createWebUtil_http_parserResource);
     OBJECT_HANDLER(WebUtil_http_parser).offset = XtOffsetOf(http_parser_ext, zo);
     OBJECT_HANDLER(WebUtil_http_parser).clone_obj = NULL;
@@ -542,12 +553,16 @@ CLASS_ENTRY_FUNCTION_D(WebUtil_http_parser){
 }
 
 static zend_object *createWebUtil_http_parserResource(zend_class_entry *ce) {
+    zval fn_parse_str;
     http_parser_ext *resource;
     resource = ALLOC_RESOURCE(http_parser_ext);
     zend_object_std_init(&resource->zo, ce);
     object_properties_init(&resource->zo, ce);
     initFunctionCache(resource);
     resource->zo.handlers = &OBJECT_HANDLER(WebUtil_http_parser);
+    ZVAL_STRING(&fn_parse_str, "parse_str");
+    registerFunctionCache(&resource->parse_str, &fn_parse_str);
+    zval_dtor(&fn_parse_str);
     return &resource->zo;
 }
 

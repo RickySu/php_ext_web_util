@@ -81,6 +81,7 @@ typedef struct http_parser_ext_s{
     http_parser_func_t onBodyParsedCallback;
     http_parser_func_t onContentPieceCallback;
     http_parser_func_t onMultipartCallback;
+    http_parser_func_t parse_str;
     zval object;
     zend_object zo;
 } http_parser_ext;

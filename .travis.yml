@@ -10,8 +10,10 @@ compiler:
 
 before_script:
     - git submodule update --init
+    - sudo apt-get -y install check pkg-config libpcre3 libpcre3-dev
 script:
     - phpize
     - ./configure --with-libdir=lib/x86_64-linux-gnu --with-pcre-dir=/usr
     - make
     - NO_INTERACTION=1 make test
+    - .travis.scripts/dumpdiff.sh
