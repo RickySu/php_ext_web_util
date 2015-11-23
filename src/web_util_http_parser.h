@@ -97,15 +97,15 @@ DECLARE_FUNCTION_ENTRY(WebUtil_http_parser) = {
     PHP_FE_END
 };
 
-static inline int multipartCallback(http_parser_ext *resource, bstring *data, int type TSRMLS_DC);
-static inline int sendData(http_parser_ext *parser, bstring *data TSRMLS_DC);
-static inline int flushBufferData(http_parser_ext *parser TSRMLS_DC);
-static inline zval *parseBody(http_parser_ext *resource TSRMLS_DC);
-static inline void parseContentType(http_parser_ext *resource TSRMLS_DC);
-static inline void parseCookie(http_parser_ext *resource, const char *cookie_field TSRMLS_DC);
-static inline void parseRequest(http_parser_ext *resource TSRMLS_DC);
-static inline void parseResponse(http_parser_ext *resource TSRMLS_DC);
-static inline void releaseParser(http_parser_ext *resource);
+static zend_always_inline int multipartCallback(http_parser_ext *resource, bstring *data, int type TSRMLS_DC);
+static zend_always_inline int sendData(http_parser_ext *parser, bstring *data TSRMLS_DC);
+static zend_always_inline int flushBufferData(http_parser_ext *parser TSRMLS_DC);
+static zend_always_inline zval *parseBody(http_parser_ext *resource TSRMLS_DC);
+static zend_always_inline void parseContentType(http_parser_ext *resource TSRMLS_DC);
+static zend_always_inline void parseCookie(http_parser_ext *resource, const char *cookie_field TSRMLS_DC);
+static zend_always_inline void parseRequest(http_parser_ext *resource TSRMLS_DC);
+static zend_always_inline void parseResponse(http_parser_ext *resource TSRMLS_DC);
+static zend_always_inline void releaseParser(http_parser_ext *resource);
 
 static void resetParserStatus(http_parser_ext *resource TSRMLS_DC);
 static int on_message_begin(http_parser_ext *resource);
