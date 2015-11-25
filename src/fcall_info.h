@@ -8,11 +8,13 @@ typedef struct fcall_info_s {
 } fcall_info_t;
 
 static zend_always_inline int fci_call_function(fcall_info_t *fcall_into, zval *retval, uint32_t param_count, zval *params) {
+    if(fcall_into->fci.size == 0){
+        return FAILURE;
+    }    
     fcall_into->fci.params = params;
     fcall_into->fci.retval = retval;
     fcall_into->fci.param_count = param_count;
-    zend_call_function(&fcall_into->fci, &fcall_into->fcc);
-    return 0;
+    return zend_call_function(&fcall_into->fci, &fcall_into->fcc);
 }
 
 static zend_always_inline void freeFunctionCache(fcall_info_t *fcall){
