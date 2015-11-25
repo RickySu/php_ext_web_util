@@ -103,8 +103,6 @@ DECLARE_FUNCTION_ENTRY(WebUtil_http_parser) = {
     PHP_FE_END
 };
 
-static zend_always_inline int fci_call_function(fcall_info_t *func, zval *retval, uint32_t param_count, zval *params);
-static zend_always_inline void registerFunctionCache(fcall_info_t *func, zval *cb);
 static zend_always_inline void releaseFunctionCache(http_parser_ext *resource);
 static zend_always_inline int multipartCallback(http_parser_ext *resource, bstring *data, int type);
 static zend_always_inline int sendData(http_parser_ext *parser, bstring *data);

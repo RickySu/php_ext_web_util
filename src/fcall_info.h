@@ -18,8 +18,8 @@ static zend_always_inline int fci_call_function(fcall_info_t *fcall_into, zval *
 static zend_always_inline void freeFunctionCache(fcall_info_t *fcall){
     if(fcall->fci.size > 0){
         zval_dtor(&fcall->fci.function_name);
-        fcall->fci.size = 0;
         zval_dtor(&fcall->func);
+        fcall->fci.size = 0;
     }
 }
 
@@ -30,6 +30,7 @@ static zend_always_inline void registerFunctionCache(fcall_info_t *fcall_into, z
         php_error_docref(NULL, E_WARNING, "param cb is not callable");
         return;
     }
+    Z_ADDREF(fcall_into->fci.function_name);
     Z_ADDREF_P(cb);
     ZVAL_COPY_VALUE(&fcall_into->func ,cb);
 }
