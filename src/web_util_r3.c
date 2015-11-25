@@ -53,7 +53,7 @@ PHP_METHOD(WebUtil_R3, addRoute){
     zval *routes, *data;
     zval rv;
     const char *pattern = NULL;
-    int pattern_len;
+    size_t pattern_len;
     long method;
     zval array_element;
 
@@ -73,12 +73,12 @@ PHP_METHOD(WebUtil_R3, addRoute){
     RETURN_LONG(zend_hash_num_elements(Z_ARRVAL_P(routes)));
 }
 
-void findSlug(char *pattern, int pattern_len, zval *names)
+void findSlug(char *pattern, size_t pattern_len, zval *names)
 {
     char *err = NULL;
     char *placeholder;
     char *name;    
-    int placeholder_len = 0, name_len = 0;
+    size_t placeholder_len = 0, name_len = 0;
     int slug_cnt = r3_slug_count(pattern, pattern_len, &err);
     int i;
     if(slug_cnt <= 0){
@@ -140,8 +140,8 @@ PHP_METHOD(WebUtil_R3, match){
     zval *self = getThis();
     web_util_r3_t *resource = FETCH_OBJECT_RESOURCE(self, web_util_r3_t);
     zval *r_route;
-    char *uri, *c_uri;
-    int uri_len;
+    char *uri = NULL, *c_uri;
+    size_t uri_len;
     long method;
     zval *r_pattern, *r_method, *r_data, *r_params;
     match_entry * entry;

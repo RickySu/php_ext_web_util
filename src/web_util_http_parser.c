@@ -576,7 +576,7 @@ PHP_METHOD(WebUtil_http_parser, __construct){
     else{
         resource->parserType = HTTP_RESPONSE;
     }
-    resource->object = *self;
+    ZVAL_ZVAL(&resource->object, self, 1, 0);
     resetParserStatus(resource);
 }
 
