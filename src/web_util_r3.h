@@ -1,7 +1,6 @@
 #ifndef _WEB_UTIL_R3_H
 #define _WEB_UTIL_R3_H
 #include "../php_ext_web_util.h"
-#include "fcall_info.h"
 #include "util.h"
 #include <r3.h>
 
@@ -20,7 +19,6 @@ ZEND_END_ARG_INFO()
 
 typedef struct web_util_r3_s{
     node *n;
-    fcall_info_t array_combine;
     zend_object zo;
 } web_util_r3_t;
 

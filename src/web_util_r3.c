@@ -146,10 +146,9 @@ PHP_METHOD(WebUtil_R3, match){
     zval *r_pattern, *r_method, *r_data, *r_params;
     match_entry * entry;
     route *matched_route;
+    zval *key;
     zval params;
-    zval retval;
-    zval function_name;
-    zval call_params[2];
+  //  zval call_params[2];
        
     if(!resource->n){
         RETURN_FALSE;
@@ -167,23 +166,21 @@ PHP_METHOD(WebUtil_R3, match){
     
     if(matched_route != NULL){
         r_route = (zval *) matched_route->data;
-        array_init(&params);        
-        for(i=0;i<entry->vars->len;i++){
-            add_next_index_string(&params, entry->vars->tokens[i]);
-        }
-        
+        array_init(&params);
         extractRoute(r_route, &r_pattern, &r_method, &r_data, &r_params);
         Z_ADDREF_P(r_data);
         add_next_index_zval(return_value, r_data);
+
         if(r_params){
-            call_params[0] = *r_params;
-            call_params[1] = params;
-            ZVAL_STRING(&function_name, "array_combine");
-            call_user_function(CG(function_table), NULL, &function_name, &retval, 2, call_params);
-            zval_dtor(&function_name);
-            add_next_index_zval(return_value, &retval);
+            for(i=0;i<entry->vars->len;i++){
+                key = zend_hash_index_find(HASH_OF(r_params), i);
+                if(!key){
+                    continue;
+                }
+                add_assoc_string_ex(&params, Z_STRVAL_P(key), Z_STRLEN_P(key), entry->vars->tokens[i]);
+            }
         }
-        zval_dtor(&params);
+        add_next_index_zval(return_value, &params);
     }
     match_entry_free(entry);    
     efree(c_uri);
