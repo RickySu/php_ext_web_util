@@ -186,10 +186,22 @@ static zend_always_inline zval *fetchArrayElement(zval *arr, const char *str, si
 
 static zend_always_inline void resetHeaderParser(http_parser_ext *resource){
     zval rv;
+    zval *header_field, tmp;
     zval *parsedData = zend_read_property(CLASS_ENTRY(WebUtil_http_parser), &resource->object, ZEND_STRL("parsedData"), 0, &rv);
     zval *parsedData_header = fetchArrayElement(parsedData, ZEND_STRL("Header"));
     if(resource->parser_data.header && resource->parser_data.field){
-        add_assoc_stringl(parsedData_header, resource->parser_data.header->val, resource->parser_data.field->val, resource->parser_data.field->len);
+        if(header_field = zend_hash_str_find(HASH_OF(parsedData_header), resource->parser_data.header->val, resource->parser_data.header->len)){
+            if(Z_TYPE_P(header_field) != IS_ARRAY){
+                ZVAL_ZVAL(&tmp, header_field, 1, 0);
+                array_init(header_field);
+                add_next_index_zval(header_field, &tmp);
+                zval_dtor(&tmp);
+            }
+            add_next_index_stringl(header_field, resource->parser_data.field->val, resource->parser_data.field->len);
+        }
+        else {
+            add_assoc_stringl(parsedData_header, resource->parser_data.header->val, resource->parser_data.field->val, resource->parser_data.field->len);
+        }
     }
     
     if(resource->parser_data.headerEnd){
@@ -308,28 +320,13 @@ static zend_always_inline void parseResponse(http_parser_ext *resource) {
 }
 
 
-static zend_always_inline void parseCookie(http_parser_ext *resource, const char *cookie_field) {
-    zval rv;
-    zval *parsedData = zend_read_property(CLASS_ENTRY(WebUtil_http_parser), &resource->object, ZEND_STRL("parsedData"), 0, &rv);
-    zval *parsedData_header = fetchArrayElement(parsedData, ZEND_STRL("Header"));
-    zval *s_cookie = fetchArrayElement_ex(parsedData_header, cookie_field, strlen(cookie_field), 0);
-    const char *cookieString;
-    size_t cookieString_len;
+static zend_always_inline void parseCookie(zval *cookie, zval *s_cookie) {
     bstring *key;
     uint token_equal_pos = 0, token_semi_pos = 0;
     uint field_start = 0;
     uint i = 0;
-
-    if(!s_cookie || Z_TYPE_P(s_cookie) != IS_STRING){
-        return;
-    }
-
-    cookieString = Z_STRVAL_P(s_cookie);
-    cookieString_len = Z_STRLEN_P(s_cookie);
-
-    zval cookie;
-    array_init(&cookie);
-    add_assoc_zval(parsedData_header, cookie_field, &cookie);
+    const char *cookieString = Z_STRVAL_P(s_cookie);
+    size_t cookieString_len = Z_STRLEN_P(s_cookie);
 
     while(cookieString_len){
         if(cookieString[i] == '='){
@@ -341,13 +338,13 @@ static zend_always_inline void parseCookie(http_parser_ext *resource, const char
             token_semi_pos = i;
             if(token_equal_pos < field_start){
                 key = bstring_make(&cookieString[field_start], i - field_start);
-                add_assoc_bool(&cookie, key->val, 1);
+                add_assoc_bool(cookie, key->val, 1);
                 bstring_free(key);
             }
             else{
-                zval s, *sp;
+//                zval s, *sp;
                 key = bstring_make(&cookieString[field_start], token_equal_pos - field_start);
-                add_assoc_stringl(&cookie, key->val, (char *) &cookieString[token_equal_pos + 1], token_semi_pos - token_equal_pos - 1);
+                add_assoc_stringl(cookie, key->val, (char *) &cookieString[token_equal_pos + 1], token_semi_pos - token_equal_pos - 1);
                 bstring_free(key);
             }
             field_start = i + 2;
@@ -405,11 +402,20 @@ static int on_headers_complete_request(http_parser_ext *resource){
     zval retval, rv;
     zval *parsedData = zend_read_property(CLASS_ENTRY(WebUtil_http_parser), &resource->object, ZEND_STRL("parsedData"), 0, &rv);
     zval *parsedData_header = fetchArrayElement(parsedData, ZEND_STRL("Header"));
-    
+    zval *s_cookie, cookie;
     resetHeaderParser(resource);
     parseRequest(resource);
     parseContentType(resource);
-    parseCookie(resource, "Cookie");
+    if(s_cookie = fetchArrayElement_ex(parsedData_header, ZEND_STRL("Cookie"), 0)){
+        array_init(&cookie);
+        if(Z_TYPE_P(s_cookie) == IS_ARRAY){
+            parseCookie(&cookie, zend_hash_index_find(HASH_OF(s_cookie), zend_hash_num_elements(HASH_OF(s_cookie)) - 1));
+        }
+        else{
+            parseCookie(&cookie, s_cookie);
+        }
+        add_assoc_zval(parsedData_header, "Cookie", &cookie);
+    }
     if(!Z_ISNULL(resource->onHeaderParsedCallback.func)){
         fci_call_function(&resource->onHeaderParsedCallback, &retval, 1, parsedData);
         ret = !zend_is_true(&retval);
@@ -419,17 +425,35 @@ static int on_headers_complete_request(http_parser_ext *resource){
 }
 
 static int on_headers_complete_response(http_parser_ext *resource){
-    int ret = 0;
+    int ret = 0, i, n;
     zval retval, rv;
     zval *parsedData = zend_read_property(CLASS_ENTRY(WebUtil_http_parser), &resource->object, ZEND_STRL("parsedData"), 0, &rv);
     zval *callback = zend_read_property(CLASS_ENTRY(WebUtil_http_parser), &resource->object, ZEND_STRL("onHeaderParsedCallback"), 0, &rv);
     zval *parsedData_header = fetchArrayElement(parsedData, ZEND_STRL("Header"));
-    
+    zval *s_cookie;
+    zval cookie;
+    zval cookie_item;
+
     resetHeaderParser(resource);
     parseResponse(resource);
     parseContentType(resource);
-    parseCookie(resource, "Set-Cookie");
-
+    if(s_cookie = fetchArrayElement_ex(parsedData_header, ZEND_STRL("Set-Cookie"), 0)){
+        array_init(&cookie);
+        if(Z_TYPE_P(s_cookie) == IS_ARRAY){
+            n = zend_hash_num_elements(HASH_OF(s_cookie));
+            for(i=0; i<n; i++){
+                array_init(&cookie_item);
+                parseCookie(&cookie_item, zend_hash_index_find(HASH_OF(s_cookie), i));
+                add_next_index_zval(&cookie, &cookie_item);
+            }
+        }
+        else{
+            array_init(&cookie_item);
+            parseCookie(&cookie_item, s_cookie);
+            add_next_index_zval(&cookie, &cookie_item);
+        }
+        add_assoc_zval(parsedData_header, "Set-Cookie", &cookie);
+    }
     if(!Z_ISNULL(resource->onHeaderParsedCallback.func)){
         fci_call_function(&resource->onHeaderParsedCallback, &retval, 1, parsedData);
         ret = !zend_is_true(&retval);

@@ -109,7 +109,7 @@ static zend_always_inline int sendData(http_parser_ext *parser, bstring *data);
 static zend_always_inline int flushBufferData(http_parser_ext *parser);
 static zend_always_inline zval parseBody(http_parser_ext *resource);
 static zend_always_inline void parseContentType(http_parser_ext *resource);
-static zend_always_inline void parseCookie(http_parser_ext *resource, const char *cookie_field);
+static zend_always_inline void parseCookie(zval *cookie, zval *s_cookie);
 static zend_always_inline void parseRequest(http_parser_ext *resource);
 static zend_always_inline void parseResponse(http_parser_ext *resource);
 static zend_always_inline void releaseParser(http_parser_ext *resource);

@@ -6,7 +6,7 @@ Check for response cookie
 <?php
 use WebUtil\Parser\HttpParser;
 
-$f = fopen(__DIR__.'/fixture/response-cookie.txt', 'r');
+$f = fopen(__DIR__.'/fixture/response-cookie-multi.txt', 'r');
 $parser = new HttpParser(HttpParser::TYPE_RESPONSE);
 $parser->setOnHeaderParsedCallback(function($parsedData){
     print_r($parsedData);
@@ -32,7 +32,23 @@ Array
                 (
                     [0] => Array
                         (
-                            [PHPSESSION] => 93qc462usashkajh1312
+                            [PHPSESSION1] => 1111
+                            [path] => /
+                            [secure] => 1
+                            [HttpOnly] => 1
+                        )
+
+                    [1] => Array
+                        (
+                            [PHPSESSION2] => 2222
+                            [path] => /
+                            [secure] => 1
+                            [HttpOnly] => 1
+                        )
+
+                    [2] => Array
+                        (
+                            [PHPSESSION3] => 3333
                             [path] => /
                             [secure] => 1
                             [HttpOnly] => 1
