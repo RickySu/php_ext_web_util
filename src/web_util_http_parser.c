@@ -21,6 +21,17 @@ PHP_METHOD(ce, me) { \
     zend_update_property(CLASS_ENTRY(ce), self, ZEND_STRL(#pn), cb TSRMLS_CC); \
 }
 
+static zend_always_inline void initFunctionCache(http_parser_ext *resource TSRMLS_DC){
+}
+
+static zend_always_inline void releaseFunctionCache(http_parser_ext *resource TSRMLS_DC){
+    freeFunctionCache(&resource->onHeaderParsedCallback TSRMLS_CC);
+    freeFunctionCache(&resource->onBodyParsedCallback TSRMLS_CC);
+    freeFunctionCache(&resource->onContentPieceCallback TSRMLS_CC);
+    freeFunctionCache(&resource->onMultipartCallback TSRMLS_CC);
+    freeFunctionCache(&resource->parse_str TSRMLS_CC);
+}
+
 static zend_always_inline int multipartCallback(http_parser_ext *resource, bstring *data, int type TSRMLS_DC) {
     int ret = 0;
     zval retval;
@@ -123,7 +134,7 @@ static zend_always_inline int flushBufferData(http_parser_ext *resource TSRMLS_D
 }
 
 static zend_always_inline zval *parseBody(http_parser_ext *resource TSRMLS_DC) {
-    zval fn, retval;
+    zval retval;
     zval *params[2];
     zval *parsedContent;
     MAKE_STD_ZVAL(parsedContent);
@@ -137,12 +148,10 @@ static zend_always_inline zval *parseBody(http_parser_ext *resource TSRMLS_DC) {
             ZVAL_STRINGL(params[0], resource->parser_data.body->val, resource->parser_data.body->len, 1);
             MAKE_STD_ZVAL(params[1]);
             array_init(params[1]);
-            ZVAL_STRING(&fn, "parse_str", 1);
-            call_user_function(CG(function_table), NULL, &fn, &retval, 2, params TSRMLS_CC);
+            fci_call_function(&resource->parse_str, &retval, 2, params TSRMLS_CC);
             ZVAL_ZVAL(parsedContent, params[1], 1, 0);
             zval_ptr_dtor(&params[0]);
             zval_ptr_dtor(&params[1]);
-            zval_dtor(&fn);
             zval_dtor(&retval);
             break;
         case CONTENT_TYPE_JSONENCODE:
@@ -270,19 +279,17 @@ static zend_always_inline void parseRequest(http_parser_ext *resource TSRMLS_DC)
     add_assoc_stringl(parsedData_query, "Path", &resource->parser_data.url->val[parser_url.field_data[UF_PATH].off], parser_url.field_data[UF_PATH].len, 1);
 
     if(parser_url.field_data[UF_QUERY].len){
-        zval fn, retval;
+        zval retval;
         zval *params[2];
         MAKE_STD_ZVAL(params[0]);
         ZVAL_STRINGL(params[0], &resource->parser_data.url->val[parser_url.field_data[UF_QUERY].off], parser_url.field_data[UF_QUERY].len, 1);
         MAKE_STD_ZVAL(params[1]);
         array_init(params[1]);
-        ZVAL_STRING(&fn, "parse_str", 1);
-        call_user_function(CG(function_table), NULL, &fn, &retval, 2, params TSRMLS_CC);
+        fci_call_function(&resource->parse_str, &retval, 2, params TSRMLS_CC);
         Z_ADDREF_P(params[1]);
         add_assoc_zval(parsedData_query, "Param", params[1]);
         zval_ptr_dtor(&params[0]);
         zval_ptr_dtor(&params[1]);
-        zval_dtor(&fn);
         zval_dtor(&retval);
     }
     else{
@@ -535,6 +542,7 @@ CLASS_ENTRY_FUNCTION_D(WebUtil_http_parser){
 }
 
 static zend_object_value createWebUtil_http_parserResource(zend_class_entry *ce TSRMLS_DC) {
+    zval *fn_parse_str;
     zend_object_value retval; 
     http_parser_ext *resource;
     resource = (http_parser_ext *) ecalloc(1, sizeof(http_parser_ext));
@@ -546,6 +554,11 @@ static zend_object_value createWebUtil_http_parserResource(zend_class_entry *ce 
         freeWebUtil_http_parserResource,
         NULL TSRMLS_CC);
     retval.handlers = &OBJECT_HANDLER(WebUtil_http_parser);
+    initFunctionCache(resource TSRMLS_CC);
+    MAKE_STD_ZVAL(fn_parse_str);
+    ZVAL_STRING(fn_parse_str, "parse_str", 1);
+    registerFunctionCache(&resource->parse_str, fn_parse_str TSRMLS_CC);
+    zval_ptr_dtor(&fn_parse_str);
     return retval;
 }
 
@@ -553,6 +566,7 @@ void freeWebUtil_http_parserResource(void *object TSRMLS_DC) {
     http_parser_ext *resource;
     resource = FETCH_RESOURCE(object, http_parser_ext);
     releaseParser(resource);
+    releaseFunctionCache(resource TSRMLS_CC);
     zend_object_std_dtor(&resource->zo TSRMLS_CC);
     efree(resource);
 }

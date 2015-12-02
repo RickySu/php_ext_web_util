@@ -1,6 +1,7 @@
 #ifndef _WEB_UTIL_HTTP_PARSER_H
 #define _WEB_UTIL_HTTP_PARSER_H
 #include "../php_ext_web_util.h"
+#include "fcall_info.h"
 #include "php_variables.h"
 #include "util.h"
 #include "bstring.h"
@@ -71,6 +72,11 @@ typedef struct http_parser_ext_s{
         int multipartEnd;
     } parser_data;
     enum http_parser_type parserType;
+    fcall_info_t onHeaderParsedCallback;
+    fcall_info_t onBodyParsedCallback;
+    fcall_info_t onContentPieceCallback;
+    fcall_info_t onMultipartCallback;
+    fcall_info_t parse_str;
     zval object;
     zend_object zo;
 } http_parser_ext;
@@ -97,6 +103,7 @@ DECLARE_FUNCTION_ENTRY(WebUtil_http_parser) = {
     PHP_FE_END
 };
 
+static zend_always_inline void releaseFunctionCache(http_parser_ext *resource TSRMLS_DC);
 static zend_always_inline int multipartCallback(http_parser_ext *resource, bstring *data, int type TSRMLS_DC);
 static zend_always_inline int sendData(http_parser_ext *parser, bstring *data TSRMLS_DC);
 static zend_always_inline int flushBufferData(http_parser_ext *parser TSRMLS_DC);
