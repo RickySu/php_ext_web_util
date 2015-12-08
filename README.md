@@ -3,7 +3,7 @@ php_ext_web_util
 
 [![Build Status](https://travis-ci.org/RickySu/php_ext_web_util.svg?branch=master)](https://travis-ci.org/RickySu/php_ext_web_util)
 
-hhvm-ext-web-util is a powerful collection of web utilities.
+php_ext_web_util is a powerful collection of web utilities.
 
 Collections
 -----------
