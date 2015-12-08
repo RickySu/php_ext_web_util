@@ -192,7 +192,7 @@ static zend_always_inline void resetHeaderParser(http_parser_ext *resource){
     if(resource->parser_data.header && resource->parser_data.field){
         if(header_field = zend_hash_str_find(HASH_OF(parsedData_header), resource->parser_data.header->val, resource->parser_data.header->len)){
             if(Z_TYPE_P(header_field) != IS_ARRAY){
-                ZVAL_ZVAL(&tmp, header_field, 1, 0);
+                ZVAL_COPY(&tmp, header_field);
                 array_init(header_field);
                 add_next_index_zval(header_field, &tmp);
                 zval_dtor(&tmp);
@@ -600,7 +600,7 @@ PHP_METHOD(WebUtil_http_parser, __construct){
     else{
         resource->parserType = HTTP_RESPONSE;
     }
-    ZVAL_ZVAL(&resource->object, self, 1, 0);
+    ZVAL_COPY(&resource->object, self);
     resetParserStatus(resource);
 }
 
