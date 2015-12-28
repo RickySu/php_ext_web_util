@@ -32,7 +32,6 @@ void freeWebUtil_R3Resource(zend_object *object) {
         r3_tree_free(resource->n);
     }
     zend_object_std_dtor(&resource->zo);
-    efree(resource);
 }
 
 static inline void initRoutes(zval *routes){

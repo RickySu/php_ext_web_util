@@ -224,10 +224,9 @@ static zend_always_inline void releaseParser(http_parser_ext *resource) {
 static zend_always_inline void resetParserStatus(http_parser_ext *resource) {
     zval rv;
     zval *parsedData = zend_read_property(CLASS_ENTRY(WebUtil_http_parser), &resource->object, ZEND_STRL("parsedData"), 0, &rv);
-    if(Z_TYPE_P(parsedData) != IS_ARRAY){
-        array_init(parsedData);
-        zend_update_property(CLASS_ENTRY(WebUtil_http_parser), &resource->object, ZEND_STRL("parsedData"), parsedData);
-    }
+    zval_dtor(parsedData);
+    array_init(parsedData);
+    zend_update_property(CLASS_ENTRY(WebUtil_http_parser), &resource->object, ZEND_STRL("parsedData"), parsedData);
     http_parser_init(&resource->parser, resource->parserType);
     resource->parser_data.contentType = 0;
     resource->parser_data.headerEnd = 0;
