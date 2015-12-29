@@ -8,7 +8,7 @@ use WebUtil\Parser\HttpParser;
 
 $f = fopen(__DIR__.'/fixture/request-cookie-multi.txt', 'r');
 $parser = new HttpParser();
-$parser->setOnHeaderParsedCallback(function($parsedData) use($parser){
+$parser->setOnHeaderParsedCallback(function($parsedData){
     print_r($parsedData);
     return true;
 });
