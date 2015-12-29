@@ -2,7 +2,7 @@
 #define _WEB_UTIL_HTTP_PARSER_H
 #include "../php_ext_web_util.h"
 #include "php_variables.h"
-#include "fcall_info.h"
+#include "fcall.h"
 #include "util.h"
 #include "bstring.h"
 #include <http_parser.h>
@@ -78,7 +78,6 @@ typedef struct http_parser_ext_s{
     fcall_info_t onMultipartCallback;
     fcall_info_t parse_str;
     zval parsedData;
-    zval object;
     zend_object zo;
 } http_parser_ext;
 
