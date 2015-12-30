@@ -217,7 +217,12 @@ static zend_always_inline void resetParserStatus(http_parser_ext *resource) {
     zval rv;
     zval *parsedData = &resource->parsedData;
     if(!Z_ISNULL(parsedData)){
-        zval_dtor(parsedData);
+        if(Z_REFCOUNT_P(parsedData) == 1){
+            zval_dtor(parsedData);
+        }
+        else{
+            Z_TRY_DELREF_P(parsedData);
+        }
         array_init(parsedData);
     }
     http_parser_init(&resource->parser, resource->parserType);
@@ -334,7 +339,6 @@ static zend_always_inline void parseCookie(zval *cookie, zval *s_cookie) {
                 bstring_free(key);
             }
             else{
-//                zval s, *sp;
                 key = bstring_make(&cookieString[field_start], token_equal_pos - field_start);
                 add_assoc_stringl(cookie, key->val, (char *) &cookieString[token_equal_pos + 1], token_semi_pos - token_equal_pos - 1);
                 bstring_free(key);
@@ -551,7 +555,7 @@ void freeWebUtil_http_parserResource(zend_object *object) {
     zval *parsedData = &resource->parsedData;
     releaseParser(resource);
     releaseFunctionCache(resource);
-    zval_dtor(parsedData);
+    Z_DELREF(resource->parsedData);
     zend_object_std_dtor(&resource->zo);
 }
 
