@@ -30,6 +30,16 @@ do{ \
     } \
 } while(0)
 
+#define ZVAL_TRY_DTOR_ARRAY_P(p) \
+do{ \
+    if(Z_REFCOUNT_P(p) == 1){ \
+        zval_dtor(p); \
+    } \
+    else{ \
+        Z_TRY_DELREF_P(p); \
+    } \
+} while(0)
+
 CLASS_ENTRY_FUNCTION_D(WebUtil_http_parser);
 
 ZEND_BEGIN_ARG_INFO(ARGINFO(WebUtil_http_parser, __construct), 0)

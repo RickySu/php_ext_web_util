@@ -217,12 +217,7 @@ static zend_always_inline void resetParserStatus(http_parser_ext *resource) {
     zval rv;
     zval *parsedData = &resource->parsedData;
     if(!Z_ISNULL(parsedData)){
-        if(Z_REFCOUNT_P(parsedData) == 1){
-            zval_dtor(parsedData);
-        }
-        else{
-            Z_TRY_DELREF_P(parsedData);
-        }
+        ZVAL_TRY_DTOR_ARRAY_P(parsedData);
         array_init(parsedData);
     }
     http_parser_init(&resource->parser, resource->parserType);
@@ -428,7 +423,6 @@ static int on_headers_complete_response(http_parser_ext *resource){
     zval *s_cookie;
     zval cookie;
     zval cookie_item;
-
     resetHeaderParser(resource);
     parseResponse(resource);
     parseContentType(resource);
@@ -555,7 +549,7 @@ void freeWebUtil_http_parserResource(zend_object *object) {
     zval *parsedData = &resource->parsedData;
     releaseParser(resource);
     releaseFunctionCache(resource);
-    Z_DELREF(resource->parsedData);
+    ZVAL_TRY_DTOR_ARRAY_P(&resource->parsedData);
     zend_object_std_dtor(&resource->zo);
 }
 
