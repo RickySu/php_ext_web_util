@@ -13,6 +13,8 @@ static zend_always_inline void releaseFunctionCache(http_parser_ext *resource){
     FCI_FREE(resource->parse_str);
 }
 
+#define STRINGIFY(x) #x
+
 #define SETTER_METHOD(ce, me, pn) \
 PHP_METHOD(ce, me) { \
     zval *self = getThis(); \
@@ -22,6 +24,15 @@ PHP_METHOD(ce, me) { \
     } \
     FCI_ADDREF(resource->pn); \
 }
+
+#define MAKE_GC_TABLE(res, pn, cnt) \
+do{ \
+    if(res->pn.fci.size){ \
+        ZVAL_COPY_VALUE(&res->gc_table[cnt], &res->pn.fci.function_name); \
+        cnt++; \
+    } \
+} while(0)
+
 
 static zend_always_inline int multipartCallback(http_parser_ext *resource, bstring *data, int type) {
     int ret = 0;
@@ -215,10 +226,9 @@ static zend_always_inline void releaseParser(http_parser_ext *resource) {
 
 static zend_always_inline void resetParserStatus(http_parser_ext *resource) {
     zval rv;
-    zval *parsedData = &resource->parsedData;
-    if(!Z_ISNULL(parsedData)){
-        ZVAL_TRY_DTOR_ARRAY_P(parsedData);
-        array_init(parsedData);
+    if(!Z_ISNULL(resource->parsedData)){
+        ZVAL_TRY_DTOR_ARRAY_P(&resource->parsedData);
+        array_init(&resource->parsedData);
     }
     http_parser_init(&resource->parser, resource->parserType);
     resource->parser_data.contentType = 0;
@@ -520,11 +530,24 @@ static int on_request_body(http_parser_ext *resource, const char *buf, size_t le
     return 0;
 }
 
+static HashTable *get_gc_http_parserResource(zval *obj, zval **table, int *n){
+    http_parser_ext *resource = FETCH_OBJECT_RESOURCE(obj, http_parser_ext);
+    int count = 0;
+    MAKE_GC_TABLE(resource, onHeaderParsedCallback, count);
+    MAKE_GC_TABLE(resource, onBodyParsedCallback, count);
+    MAKE_GC_TABLE(resource, onContentPieceCallback, count);
+    MAKE_GC_TABLE(resource, onMultipartCallback, count);
+    *table = resource->gc_table;
+    *n = count;
+    return zend_std_get_properties(obj);
+}
+
 CLASS_ENTRY_FUNCTION_D(WebUtil_http_parser){
     REGISTER_CLASS_WITH_OBJECT_NEW(WebUtil_http_parser, "WebUtil\\Parser\\HttpParser", createWebUtil_http_parserResource);
     OBJECT_HANDLER(WebUtil_http_parser).offset = XtOffsetOf(http_parser_ext, zo);
     OBJECT_HANDLER(WebUtil_http_parser).clone_obj = NULL;
     OBJECT_HANDLER(WebUtil_http_parser).free_obj = freeWebUtil_http_parserResource;
+    OBJECT_HANDLER(WebUtil_http_parser).get_gc = get_gc_http_parserResource;
     REGISTER_CLASS_CONSTANT_LONG(WebUtil_http_parser, TYPE_REQUEST);
     REGISTER_CLASS_CONSTANT_LONG(WebUtil_http_parser, TYPE_RESPONSE);
 }

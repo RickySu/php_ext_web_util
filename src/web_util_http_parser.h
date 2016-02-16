@@ -82,6 +82,7 @@ typedef struct http_parser_ext_s{
         int multipartEnd;
     } parser_data;
     enum http_parser_type parserType;
+    zval gc_table[4];
     fcall_info_t onHeaderParsedCallback;
     fcall_info_t onBodyParsedCallback;
     fcall_info_t onContentPieceCallback;
@@ -93,6 +94,7 @@ typedef struct http_parser_ext_s{
 
 static zend_object *createWebUtil_http_parserResource(zend_class_entry *class_type);
 void freeWebUtil_http_parserResource(zend_object *object);
+static HashTable *get_gc_http_parserResource(zval *obj, zval **table, int *n);
 
 PHP_METHOD(WebUtil_http_parser, __construct);
 PHP_METHOD(WebUtil_http_parser, feed);
