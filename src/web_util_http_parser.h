@@ -82,7 +82,12 @@ typedef struct http_parser_ext_s{
         int multipartEnd;
     } parser_data;
     enum http_parser_type parserType;
-    zval gc_table[4];
+    struct {
+        zval onHeaderParsedCallback;
+        zval onBodyParsedCallback;
+        zval onContentPieceCallback;
+        zval onMultipartCallback;
+    } gc_table;
     fcall_info_t onHeaderParsedCallback;
     fcall_info_t onBodyParsedCallback;
     fcall_info_t onContentPieceCallback;

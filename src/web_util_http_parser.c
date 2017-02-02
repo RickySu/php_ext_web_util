@@ -26,11 +26,10 @@ PHP_METHOD(ce, me) { \
     FCI_ADDREF(resource->pn); \
 }
 
-#define MAKE_GC_TABLE(res, pn, cnt) \
+#define MAKE_GC_TABLE(res, pn) \
 do{ \
     if(res->pn.fci.size){ \
-        ZVAL_COPY_VALUE(&res->gc_table[cnt], &res->pn.fci.function_name); \
-        cnt++; \
+        ZVAL_COPY_VALUE(&res->gc_table.pn, &res->pn.fci.function_name); \
     } \
 } while(0)
 
@@ -533,13 +532,12 @@ static int on_request_body(http_parser_ext *resource, const char *buf, size_t le
 
 static HashTable *get_gc_http_parserResource(zval *obj, zval **table, int *n){
     http_parser_ext *resource = FETCH_OBJECT_RESOURCE(obj, http_parser_ext);
-    int count = 0;
-    MAKE_GC_TABLE(resource, onHeaderParsedCallback, count);
-    MAKE_GC_TABLE(resource, onBodyParsedCallback, count);
-    MAKE_GC_TABLE(resource, onContentPieceCallback, count);
-    MAKE_GC_TABLE(resource, onMultipartCallback, count);
-    *table = resource->gc_table;
-    *n = count;
+    MAKE_GC_TABLE(resource, onHeaderParsedCallback);
+    MAKE_GC_TABLE(resource, onBodyParsedCallback);
+    MAKE_GC_TABLE(resource, onContentPieceCallback);
+    MAKE_GC_TABLE(resource, onMultipartCallback);
+    *table = (zval *) &resource->gc_table;
+    *n = sizeof(resource->gc_table) / sizeof(zval);
     return zend_std_get_properties(obj);
 }
 
