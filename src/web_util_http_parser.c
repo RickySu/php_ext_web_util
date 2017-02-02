@@ -19,6 +19,7 @@ static zend_always_inline void releaseFunctionCache(http_parser_ext *resource){
 PHP_METHOD(ce, me) { \
     zval *self = getThis(); \
     http_parser_ext *resource = FETCH_OBJECT_RESOURCE(self, http_parser_ext); \
+    freeFunctionCache(&resource->pn); \
     if(FAILURE == zend_parse_parameters(ZEND_NUM_ARGS(), "f", FCI_PARSE_PARAMETERS_CC(resource->pn))) { \
         return; \
     } \
