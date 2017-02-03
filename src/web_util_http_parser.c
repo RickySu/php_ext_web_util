@@ -43,9 +43,8 @@ static zend_always_inline int multipartCallback(http_parser_ext *resource, bstri
         ZVAL_LONG(&params[1], type);
         fci_call_function(&resource->onMultipartCallback, &retval, 2, params);
         ret = !zend_is_true(&retval);
-        zval_dtor(&retval);
-        zval_dtor(&params[0]);
-        zval_dtor(&params[1]);
+        zval_ptr_dtor(&retval);
+        zval_ptr_dtor(&params[0]);
     }
     bstring_free(data);
     return ret;
@@ -140,8 +139,8 @@ static zend_always_inline zval parse_str(const char *data, size_t data_len, fcal
     ZVAL_MAKE_REF(&params[1]);
     fci_call_function(parse_str_func, &retval, 2, params);
     ZVAL_UNREF(&params[1]);
-    zval_dtor(&params[0]);
-    zval_dtor(&retval);
+    zval_ptr_dtor(&params[0]);
+    zval_ptr_dtor(&retval);
     return params[1];
 }
 
@@ -198,7 +197,7 @@ static zend_always_inline void resetHeaderParser(http_parser_ext *resource){
                 ZVAL_COPY(&tmp, header_field);
                 array_init(header_field);
                 add_next_index_zval(header_field, &tmp);
-                zval_dtor(&tmp);
+                zval_ptr_dtor(&tmp);
             }
             add_next_index_stringl(header_field, resource->parser_data.field->val, resource->parser_data.field->len);
         }
@@ -390,10 +389,10 @@ static int on_message_complete(http_parser_ext *resource){
     if(!FCI_ISNULL(resource->onBodyParsedCallback)){
         fci_call_function(&resource->onBodyParsedCallback, &retval, 1, &parsedBody);
         ret = !zend_is_true(&retval);
-        zval_dtor(&retval);
+        zval_ptr_dtor(&retval);
     }
-    zval_dtor(&parsedBody);
-    zval_dtor(&retval);
+    zval_ptr_dtor(&parsedBody);
+    zval_ptr_dtor(&retval);
     releaseParser(resource);
     return ret;
 }
@@ -420,7 +419,7 @@ static int on_headers_complete_request(http_parser_ext *resource){
     if(!FCI_ISNULL(resource->onHeaderParsedCallback)){
         fci_call_function(&resource->onHeaderParsedCallback, &retval, 1, parsedData);
         ret = !zend_is_true(&retval);
-        zval_dtor(&retval);
+        zval_ptr_dtor(&retval);
     }
     return ret;
 }
@@ -456,7 +455,7 @@ static int on_headers_complete_response(http_parser_ext *resource){
     if(!FCI_ISNULL(resource->onHeaderParsedCallback)){
         fci_call_function(&resource->onHeaderParsedCallback, &retval, 1, parsedData);
         ret = !zend_is_true(&retval);
-        zval_dtor(&retval);
+        zval_ptr_dtor(&retval);
     }
     return ret;
 }
@@ -491,8 +490,8 @@ static int on_response_body(http_parser_ext *resource, const char *buf, size_t l
         ZVAL_STRINGL(&param, buf, len);
         fci_call_function(&resource->onContentPieceCallback, &retval, 1, &param);
         ret = !zend_is_true(&retval);
-        zval_dtor(&retval);
-        zval_dtor(&param);
+        zval_ptr_dtor(&retval);
+        zval_ptr_dtor(&param);
     }
     
     if(ret){
@@ -513,8 +512,8 @@ static int on_request_body(http_parser_ext *resource, const char *buf, size_t le
         ZVAL_STRINGL(&param, buf, len);
         fci_call_function(&resource->onContentPieceCallback, &retval, 1, &param);
         ret = !zend_is_true(&retval);
-        zval_dtor(&retval);
-        zval_dtor(&param);
+        zval_ptr_dtor(&retval);
+        zval_ptr_dtor(&param);
     }
     
     if(ret){
@@ -561,7 +560,7 @@ static zend_object *createWebUtil_http_parserResource(zend_class_entry *ce) {
     ZVAL_STRING(&fn_parse_str, "parse_str");
     zend_fcall_info_init(&fn_parse_str, 0, FCI_PARSE_PARAMETERS_CC(resource->parse_str), NULL, NULL);
     FCI_ADDREF(resource->parse_str);
-    zval_dtor(&fn_parse_str);
+    zval_ptr_dtor(&fn_parse_str);
     array_init(&resource->parsedData);
     return &resource->zo;
 }
